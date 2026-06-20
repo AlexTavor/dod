@@ -42,7 +42,9 @@ def _api(paths: Paths, method: str, path: str, payload: dict | None = None) -> t
         req.add_header("Content-Type", "application/json")
         req.add_header("X-Dod-Token", _client_token(paths))
     try:
-        with urllib.request.urlopen(req, timeout=8) as r:
+        # 15s, not 8s: under a cold-start storm (several `uv`/duckdb children booting at
+        # once) the daemon's thread can be CPU-starved briefly; don't read that as down.
+        with urllib.request.urlopen(req, timeout=15) as r:
             return r.status, json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
         try:
