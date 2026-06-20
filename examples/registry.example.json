@@ -1,0 +1,34 @@
+{
+  "_comment": "Example durable registry. Copy to $DOD_HOME/registry.json (or run `dod init`) and edit. dod only READS this file; it writes adopted/ad-hoc entries to local.json. Each entry is BOTH the launch contract and the docs. Prefer ABSOLUTE cwd paths (dod is cross-project; there is no single repo root).",
+  "entries": [
+    {
+      "id": "hello",
+      "name": "Hello (example)",
+      "blurb": "A trivial static file server, just to prove dod can launch + frame a dashboard.",
+      "why": "Replace this with your real dashboards. cmd is an argv LIST (never a shell string).",
+      "tags": ["examples"],
+      "type": "web",
+      "cmd": ["python3", "-m", "http.server", "8099", "--bind", "127.0.0.1"],
+      "cwd": "/tmp",
+      "port": 8099,
+      "ready": {"kind": "http", "path": "/", "status": 200},
+      "ready_timeout_s": 15,
+      "stop": "sigterm",
+      "singleton": true
+    },
+    {
+      "id": "external-app",
+      "name": "Some external app (example)",
+      "blurb": "A dashboard whose lifecycle dod does NOT own — it only adopts/frames it.",
+      "why": "type web-external + empty cmd = adopt-only: start it yourself, dod renders the running port. stop:leave means dod never kills it.",
+      "tags": ["examples"],
+      "type": "web-external",
+      "cmd": [],
+      "cwd": ".",
+      "port": 8100,
+      "ready": {"kind": "http", "path": "/", "status": 200},
+      "stop": "leave",
+      "singleton": true
+    }
+  ]
+}

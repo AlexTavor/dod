@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>dod</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/dashkit.js"></script>
+</head>
+<body><div id="app">
+  <header>
+    <b>dod</b><span class="tagline">dashboard of dashboards</span>
+    <span id="count" class="count"></span>
+    <span class="spacer"></span>
+    <button class="btn" onclick="probe()" title="scan registry ports for dashkit dashboards">probe</button>
+  </header>
+  <nav id="nav"></nav>
+  <main>
+    <div id="stage"></div>
+    <div id="drawer"></div>
+  </main>
+</div>
+<script>const TOKEN="__TOKEN__";</script>
+<script src="/app.js"></script>
+</body></html>
