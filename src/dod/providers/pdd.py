@@ -18,6 +18,7 @@ If ``cli`` is missing or not found on disk, the provider yields nothing (cleanly
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 
 from ..config import Paths
@@ -70,9 +71,12 @@ def find_pdd_repos(roots: list[Path], max_depth: int = 4) -> list[Path]:
 class PddProvider:
     name = "pdd"
 
-    def __init__(self, config: dict | None = None, repo_finder=find_pdd_repos):
+    def __init__(self, config: dict | None = None, repo_finder=find_pdd_repos, ttl: float = 60.0):
         self.config = config or {}
         self._find = repo_finder
+        self.ttl = ttl                 # discover() runs every sampler tick — cache the fs scan
+        self._cache: list[dict] | None = None
+        self._cache_at = 0.0
 
     @classmethod
     def from_paths(cls, paths: Paths) -> "PddProvider":
@@ -80,6 +84,14 @@ class PddProvider:
         return cls(cfg)
 
     def discover(self, paths: Paths) -> list[dict]:
+        now = time.monotonic()
+        if self._cache is not None and (now - self._cache_at) < self.ttl:
+            return self._cache
+        self._cache = self._scan(paths)
+        self._cache_at = now
+        return self._cache
+
+    def _scan(self, paths: Paths) -> list[dict]:
         cfg = self.config
         if cfg.get("enabled") is False:
             return []

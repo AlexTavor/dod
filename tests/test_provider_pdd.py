@@ -40,11 +40,29 @@ def test_discover_emits_two_dashboards_per_repo(paths, tmp_path):
     assert findings["cmd"] == ["node", str(cli), "dashboard", str(repo),
                                "--port", str(findings["port"]), "--no-open"]
     assert 4300 <= findings["port"] <= 4399
-    # ports are unique across the two dashboards and stable across re-discovery
+    # ports are unique across the two dashboards and stable across re-discovery —
+    # a FRESH provider (empty cache) must reproduce them from the persisted allocator.
     ports = {e["id"]: e["port"] for e in entries}
     assert len(set(ports.values())) == 2
-    again = {e["id"]: e["port"] for e in prov.discover(paths)}
+    fresh = PddProvider({"enabled": True, "cli": str(cli)},
+                        repo_finder=lambda roots, depth: [repo])
+    again = {e["id"]: e["port"] for e in fresh.discover(paths)}
     assert again == ports
+
+
+def test_discover_caches_fs_scan(paths, tmp_path):
+    cli = tmp_path / "pdd.ts"
+    cli.write_text("// cli")
+    calls = []
+
+    def finder(roots, depth):
+        calls.append(1)
+        return []
+
+    prov = PddProvider({"enabled": True, "cli": str(cli)}, repo_finder=finder, ttl=60.0)
+    prov.discover(paths)
+    prov.discover(paths)
+    assert len(calls) == 1        # second call served from cache, no re-scan
 
 
 def test_discover_disambiguates_same_basename(paths, tmp_path):

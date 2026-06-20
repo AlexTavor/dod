@@ -56,7 +56,7 @@ class App:
             self.paths.server.unlink(missing_ok=True)
 
     def serve(self, port: int) -> int:
-        from .server import make_handler           # late import to avoid cycle
+        from .server import make_handler  # late import to avoid cycle
         self._serving = True
         atexit.register(self.shutdown)
         self.supervisor.reap_on_boot()             # re-adopt survivors / record deaths
