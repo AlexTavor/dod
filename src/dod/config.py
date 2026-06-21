@@ -20,7 +20,10 @@ from pathlib import Path
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8090
-CONTRACT = "dashkit/1"          # marker in /api/meta distinguishing a native-spec dashboard
+CONTRACT = "dod-kit/1"          # current native-spec marker in /api/meta
+# Accepted markers: the kit (dod-kit/1) and its predecessor dashkit/1 (same spec shape),
+# so the engine recognizes both. fetch_meta / announce gate on membership, not equality.
+CONTRACTS = frozenset({"dod-kit/1", "dashkit/1"})
 LOG_CAP = 2_000_000            # bytes; cap captured child logs
 ID_RE = re.compile(r"^[a-z0-9_-]+$")
 

@@ -19,7 +19,7 @@ import re
 import urllib.parse
 from http.server import BaseHTTPRequestHandler
 
-from .config import CONTRACT, ID_RE, WEB_DIR
+from .config import CONTRACTS, ID_RE, WEB_DIR
 from .probe import log_tail, proxy_get, proxy_post
 
 
@@ -186,8 +186,8 @@ def make_handler(app):
                 assert 1 <= port <= 65535
             except Exception:  # noqa: BLE001
                 return self._send(400, json.dumps({"error": "bad port"}))
-            if body.get("contract") != CONTRACT:
-                return self._send(400, json.dumps({"error": "not a dashkit announce"}))
+            if body.get("contract") not in CONTRACTS:
+                return self._send(400, json.dumps({"error": "not a dod-kit announce"}))
             app.discovery.record(body, port)
             return self._send(200, json.dumps({"ok": True}))
 

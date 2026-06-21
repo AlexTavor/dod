@@ -21,24 +21,42 @@ from __future__ import annotations
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from .config import WEB_DIR
+
 CONTRACT = "dod-kit/1"
 HOST = "127.0.0.1"
 
+# Standalone shim: a kit project renders itself when opened directly (and a GET / → 200
+# also makes a naive port/"/" liveness probe pass). dod renders the same spec in its own
+# pane via the proxy; one renderer, two hosts — same as dashkit.
+SHIM = """<!doctype html><html><head><meta charset="utf-8"><title>__TITLE__</title>
+<style>html,body{margin:0;height:100%;background:#16140f}</style>
+<script src="/dashkit.js"></script></head>
+<body><div id="dk"></div>
+<script>dashkit.mount({renderUrl:'/api/render', mount:'#dk'});</script></body></html>"""
+
 
 def make_handler(meta: dict, render, on_action=None):
-    full_meta = {"contract": CONTRACT, "kind": "spec", "version": "1",
+    # render:"spec" is the engine's discriminator (supervisor.state) for native render vs
+    # iframe; contract is the discovery gate (probe.fetch_meta). Both must be set or a kit
+    # dashboard renders as a raw-JSON iframe and is invisible to discovery.
+    full_meta = {"contract": CONTRACT, "render": "spec", "version": "1",
                  "accepts_actions": on_action is not None,
                  "refresh_ms": meta.get("refresh_ms", 2000), **meta}
+
+    shim = SHIM.replace("__TITLE__", str(meta.get("name", "dashboard")))
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
 
-        def _send(self, code, obj):
+        def _send(self, code, obj, ctype="application/json", no_cache=False):
             data = obj if isinstance(obj, bytes) else json.dumps(obj).encode()
             self.send_response(code)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
+            if no_cache:
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self.end_headers()
             try:
                 self.wfile.write(data)
@@ -47,6 +65,14 @@ def make_handler(meta: dict, render, on_action=None):
 
         def do_GET(self):
             p = self.path.split("?", 1)[0]
+            if p == "/":
+                return self._send(200, shim, "text/html; charset=utf-8")
+            if p == "/dashkit.js":
+                try:
+                    return self._send(200, (WEB_DIR / "dashkit.js").read_bytes(),
+                                      "application/javascript; charset=utf-8", no_cache=True)
+                except FileNotFoundError:
+                    return self._send(404, b"// dashkit.js not found", "text/plain")
             if p == "/api/meta":
                 return self._send(200, full_meta)
             if p == "/api/render":

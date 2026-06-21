@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from .config import CONTRACT, HOST
+from .config import CONTRACTS, HOST
 
 
 def port_open(port: int) -> bool:
@@ -52,7 +52,7 @@ def fetch_meta(port: int) -> dict | None:
         req = urllib.request.Request(f"http://{HOST}:{int(port)}/api/meta", method="GET")
         with urllib.request.urlopen(req, timeout=0.4) as r:
             m = json.loads(r.read(200_000) or b"{}")
-        return m if isinstance(m, dict) and m.get("contract") == CONTRACT else None
+        return m if isinstance(m, dict) and m.get("contract") in CONTRACTS else None
     except Exception:  # noqa: BLE001
         return None
 

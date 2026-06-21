@@ -1,7 +1,11 @@
-"""DERISK walking skeleton (PDD): the riskiest new seam in dod v2 — the action
-round-trip (logic → display → logic) through dod's NEW POST /api/action proxy, with
-its security. Exercised with REAL processes (a kit counter server + a real dod server),
-no mocking of the risk path. See docs/derisk/wave0-kit.md.
+"""DERISK walking skeleton (PDD): the riskiest new seam in dod v2 — the kit's
+render-up + action-down round-trip, proven through the REAL engine path (the contract
+discriminator + supervisor.state), not a raw id+port bypass. Exercised with real
+processes. See docs/derisk/wave0-kit.md.
+
+Covers the negative space the derisk scrutiny demanded: the discriminator resolving a
+kit to render:'spec'; a no-action (read-only) dashboard's 405; a throwing handler's 500;
+wrong-token and cross-origin guard branches; and a registered-but-dead 502.
 """
 import json
 import threading
@@ -11,11 +15,16 @@ from http.server import ThreadingHTTPServer
 from dod import kit
 from dod.app import App
 from dod.server import make_handler
-from tests.conftest import entry, write_local
+from tests.conftest import entry
+
+
+def _kit(render, on_action=None, meta=None):
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), kit.make_handler(meta or {"name": "K"}, render, on_action))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd, httpd.server_address[1]
 
 
 def _counter():
-    """A real dod-kit/1 project: pure logic (a counter) with an action channel."""
     state = {"count": 0}
 
     def render():
@@ -26,60 +35,130 @@ def _counter():
             state["count"] += 1
         elif action == "add":
             state["count"] += int(payload.get("n", 0))
+        elif action == "boom":
+            raise RuntimeError("boom")          # exercises the kit's 500 trap
         else:
-            return {"ok": False, "error": "unknown action"}      # no-op: mutate nothing
+            return {"ok": False, "error": "unknown action"}   # no-op
         return {"ok": True, "count": state["count"]}
 
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), kit.make_handler({"name": "Counter"}, render, on_action))
+    httpd, port = _kit(render, on_action, {"name": "Counter"})
+    return httpd, port, state
+
+
+def _dod(paths, token="t"):
+    app = App(paths, providers=[], token=token)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(app))
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    return httpd, state
+    return app, httpd, f"http://127.0.0.1:{httpd.server_address[1]}"
 
 
-def _post(base, payload, token):
+def _post(base, payload, token=True, token_value="t", origin=None):
     headers = {"Content-Type": "application/json"}
     if token:
-        headers["X-Dod-Token"] = "t"
+        headers["X-Dod-Token"] = token_value
+    if origin:
+        headers["Origin"] = origin
     req = urllib.request.Request(base + "/api/action", data=json.dumps(payload).encode(),
                                  method="POST", headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=4) as r:
+        with urllib.request.urlopen(req, timeout=6) as r:
             return r.status, json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
-        return e.code, json.loads(e.read() or b"{}")
+        body = e.read()
+        try:
+            return e.code, json.loads(body or b"{}")
+        except Exception:  # noqa: BLE001
+            return e.code, {}
 
 
 def _render(base):
     return json.loads(urllib.request.urlopen(base + "/api/render?id=counter", timeout=4).read())
 
 
-def test_action_roundtrip_through_dod(paths):
-    counter, state = _counter()
-    cport = counter.server_address[1]
-    write_local(paths, [entry("counter", type="web-external", cmd=[], port=cport, stop="leave")])
-    app = App(paths, providers=[], token="t")
-    dod = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(app))
-    threading.Thread(target=dod.serve_forever, daemon=True).start()
-    base = f"http://127.0.0.1:{dod.server_address[1]}"
+# ── the seam: discriminator + action round-trip, through the real path ────
+def test_discriminator_resolves_kit_to_spec(paths):
+    """B1+B2: the REAL fetch_meta + supervisor.state path resolves a kit to render:'spec'
+    (the skeleton no longer bypasses the discriminator)."""
+    counter, port, _ = _counter()
+    app, dod, _ = _dod(paths)
+    app.registry.add_local(entry("counter", type="web-external", cmd=[], port=port, stop="leave"))
     try:
-        # render-up: dod proxies the project's spec
-        assert _render(base)["panels"][0]["value"] == 0
-        # interact-down WITH token: the action reaches the logic and mutates state
-        code, b = _post(base, {"id": "counter", "action": "increment"}, token=True)
-        assert code == 200 and b["count"] == 1
-        # the loop closes: the next render reflects the mutation
-        assert _render(base)["panels"][0]["value"] == 1
-        # payload carries through
-        code, b = _post(base, {"id": "counter", "action": "add", "payload": {"n": 5}}, token=True)
-        assert b["count"] == 6
-        # SECURITY (S2): a mutating action WITHOUT the token is refused, state untouched
-        code, b = _post(base, {"id": "counter", "action": "increment"}, token=False)
-        assert code == 403 and state["count"] == 6
-        # NO-OP (adequacy): an unknown action mutates nothing
-        code, b = _post(base, {"id": "counter", "action": "bogus"}, token=True)
-        assert b["ok"] is False and state["count"] == 6
-        # unknown project id is a clean 404, not a proxy crash
-        code, b = _post(base, {"id": "ghost", "action": "increment"}, token=True)
-        assert code == 404
+        st = app.supervisor.state(app.registry.get("counter"))
+        assert st["render"] == "spec"               # resolved via real /api/meta, not assumed
+        assert st["state"] in ("ready", "external")
     finally:
         dod.shutdown()
         counter.shutdown()
+
+
+def test_action_roundtrip_through_dod(paths):
+    counter, port, state = _counter()
+    app, dod, base = _dod(paths)
+    app.registry.add_local(entry("counter", type="web-external", cmd=[], port=port, stop="leave"))
+    try:
+        assert _render(base)["panels"][0]["value"] == 0
+        code, b = _post(base, {"id": "counter", "action": "increment"})
+        assert code == 200 and b["count"] == 1
+        assert _render(base)["panels"][0]["value"] == 1     # loop closes
+        code, b = _post(base, {"id": "counter", "action": "add", "payload": {"n": 5}})
+        assert b["count"] == 6
+        # no-op: unknown action mutates nothing
+        code, b = _post(base, {"id": "counter", "action": "bogus"})
+        assert b["ok"] is False and state["count"] == 6
+        # unknown project id → clean 404, not a proxy crash
+        assert _post(base, {"id": "ghost", "action": "increment"})[0] == 404
+    finally:
+        dod.shutdown()
+        counter.shutdown()
+
+
+# ── security: full guard surface (R2 earned, not asserted by prose) ───────
+def test_action_guard_rejects_no_wrong_token_and_foreign_origin(paths):
+    counter, port, state = _counter()
+    app, dod, base = _dod(paths)
+    app.registry.add_local(entry("counter", type="web-external", cmd=[], port=port, stop="leave"))
+    try:
+        assert _post(base, {"id": "counter", "action": "increment"}, token=False)[0] == 403
+        assert _post(base, {"id": "counter", "action": "increment"}, token_value="wrong")[0] == 403
+        assert _post(base, {"id": "counter", "action": "increment"}, origin="http://evil.example")[0] == 403
+        assert state["count"] == 0                  # nothing mutated through any rejected path
+    finally:
+        dod.shutdown()
+        counter.shutdown()
+
+
+# ── robustness / contract negative space ─────────────────────────────────
+def test_no_action_dashboard_returns_405(paths):
+    ro, port = _kit(lambda: {"title": "RO", "panels": []})        # on_action=None → read-only
+    app, dod, base = _dod(paths)
+    app.registry.add_local(entry("ro", type="web-external", cmd=[], port=port, stop="leave"))
+    try:
+        meta = json.loads(urllib.request.urlopen(base + "/api/cmeta?id=ro", timeout=4).read())
+        assert meta["accepts_actions"] is False
+        assert _post(base, {"id": "ro", "action": "x"})[0] == 405
+    finally:
+        dod.shutdown()
+        ro.shutdown()
+
+
+def test_throwing_action_is_500_and_child_survives(paths):
+    counter, port, _ = _counter()
+    app, dod, base = _dod(paths)
+    app.registry.add_local(entry("counter", type="web-external", cmd=[], port=port, stop="leave"))
+    try:
+        assert _post(base, {"id": "counter", "action": "boom"})[0] == 500
+        assert _render(base)["panels"][0]["value"] == 0     # child still serving after the throw
+    finally:
+        dod.shutdown()
+        counter.shutdown()
+
+
+def test_registered_but_dead_project_is_502(paths):
+    dead, port = _kit(lambda: {"panels": []})
+    dead.shutdown()                                  # port now closed but entry still registered
+    app, dod, base = _dod(paths)
+    app.registry.add_local(entry("dead", type="web-external", cmd=[], port=port, stop="leave"))
+    try:
+        assert _post(base, {"id": "dead", "action": "x"})[0] == 502
+    finally:
+        dod.shutdown()
