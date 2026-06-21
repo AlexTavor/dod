@@ -13,6 +13,7 @@ from http.server import ThreadingHTTPServer
 
 from .config import HOST, Paths
 from .discovery import Discovery
+from .providers.manifest import ManifestProvider
 from .providers.pdd import PddProvider
 from .registry import Registry
 from .sampler import run_sampler
@@ -21,7 +22,7 @@ from .util import write_json
 
 
 def default_providers(paths: Paths) -> list:
-    return [PddProvider.from_paths(paths)]
+    return [ManifestProvider.from_paths(paths), PddProvider.from_paths(paths)]
 
 
 class App:

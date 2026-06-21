@@ -47,6 +47,15 @@ def _default_spawn(cmd, cwd, env, log_path):
     return subprocess.Popen(cmd, cwd=cwd, env=env, start_new_session=True)
 
 
+# Detailed states that mean "something is running" — projected to status="live".
+LIVE_STATES = frozenset({"ready", "external", "starting", "unhealthy", "launched", "running"})
+
+
+def _is_marker(name: str) -> bool:
+    """A run-dir file that is NOT a child lockfile (crash/clean-stop reason markers)."""
+    return name.endswith((".crash.json", ".stop.json"))
+
+
 def pid_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
@@ -87,6 +96,13 @@ class Supervisor:
     def _clear_crash(self, eid: str):
         self.paths.crash(eid).unlink(missing_ok=True)
 
+    def _write_stop(self, eid: str):
+        write_json(self.paths.stopmark(eid), {"kind": "clean", "at": self.clock()})
+
+    def _clear_marks(self, eid: str):
+        self.paths.crash(eid).unlink(missing_ok=True)
+        self.paths.stopmark(eid).unlink(missing_ok=True)
+
     def _owns(self, lf: dict | None) -> bool:
         """True only if the lockfile's pid is alive AND still in its recorded process
         group — the pgid check defeats pid-reuse faking a live child after a restart."""
@@ -106,7 +122,7 @@ class Supervisor:
     def start(self, e: dict) -> dict:
         eid = e["id"]
         cwd = self.registry.resolve_cwd(e)
-        self._clear_crash(eid)                 # a fresh start clears any prior crash
+        self._clear_marks(eid)                 # a fresh start clears any prior crash/stop reason
         if e["type"] == "terminal":
             try:
                 self._spawn(e["cmd"], cwd, None, None)
@@ -167,7 +183,8 @@ class Supervisor:
         if p and p.poll() is not None:          # already exited — reap, don't signal a dead pgid
             with self.lock:
                 self.procs.pop(eid, None)
-            self._clear_crash(eid)
+            self._clear_marks(eid)
+            self._write_stop(eid)               # intentional stop → reason is clean
             self.paths.lock(eid).unlink(missing_ok=True)
             return {"ok": True}
         pgid = None
@@ -192,7 +209,8 @@ class Supervisor:
                             "detail": "process did not release the socket; it may have escaped its process group"}
         with self.lock:
             self.procs.pop(eid, None)
-        self._clear_crash(eid)
+        self._clear_marks(eid)
+        self._write_stop(eid)                   # clean stop → durable reason
         self.paths.lock(eid).unlink(missing_ok=True)
         return {"ok": True}
 
@@ -214,7 +232,7 @@ class Supervisor:
         if not self.paths.run.exists():
             return
         for lp in self.paths.run.glob("*.json"):
-            if lp.name.endswith(".crash.json"):
+            if _is_marker(lp.name):
                 continue
             eid = lp.stem
             lf = self._read_lock(eid)
@@ -244,7 +262,7 @@ class Supervisor:
             self.paths.lock(eid).unlink(missing_ok=True)
         if self.paths.run.exists():
             for lp in self.paths.run.glob("*.json"):
-                if lp.name.endswith(".crash.json"):
+                if _is_marker(lp.name):
                     continue
                 eid = lp.stem
                 if eid in killed:
@@ -256,6 +274,29 @@ class Supervisor:
 
     # ── liveness ────────────────────────────────────────────────────────
     def state(self, e: dict) -> dict:
+        """The detailed state, projected to the user-facing model: a top-level
+        ``status`` (live|stopped) and a ``last_stop_reason`` (clean | crash+exit | …)."""
+        r = self._state_raw(e)
+        st = r["state"]
+        if st in LIVE_STATES:
+            r["status"], r["last_stop_reason"] = "live", None
+        else:
+            r["status"] = "stopped"
+            r["last_stop_reason"] = self._stop_reason(e["id"], st, r.get("exit"))
+        return r
+
+    def _stop_reason(self, eid: str, st: str, exit_code):
+        if st == "crashed":
+            return {"kind": "crash", "exit": exit_code}
+        if st == "port-busy-foreign":
+            return {"kind": "port-busy"}
+        if st == "archived":
+            return None
+        # st == "stopped": _state_raw already routed real crashes to "crashed", so a
+        # surviving stop marker means a deliberate stop; otherwise it never ran.
+        return {"kind": "clean"} if self.paths.stopmark(eid).exists() else None
+
+    def _state_raw(self, e: dict) -> dict:
         eid = e["id"]
         base = {"id": eid, "name": e.get("name", eid), "blurb": e.get("blurb", ""),
                 "why": e.get("why", ""), "tags": e.get("tags", []), "type": e["type"],

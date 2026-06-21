@@ -86,6 +86,9 @@ class Paths:
     def crash(self, eid: str) -> Path:
         return self.run / f"{eid}.crash.json"
 
+    def stopmark(self, eid: str) -> Path:
+        return self.run / f"{eid}.stop.json"
+
     def ensure(self) -> "Paths":
         self.home.mkdir(parents=True, exist_ok=True)
         self.run.mkdir(parents=True, exist_ok=True)

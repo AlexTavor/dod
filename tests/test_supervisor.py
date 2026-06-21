@@ -157,3 +157,51 @@ def test_state_stopped(sup, monkeypatch):
     monkeypatch.setattr(probe, "port_open", lambda p: False)
     monkeypatch.setattr(probe, "probe", lambda p, r: (False, True, None))   # hermetic: no real socket
     assert sup.state(entry("d1", port=8077))["state"] == "stopped"
+
+
+# ── status model: live | stopped + last_stop_reason ─────────────────────
+def test_status_live_has_no_stop_reason(sup, monkeypatch):
+    monkeypatch.setattr(probe, "port_open", lambda p: True)
+    monkeypatch.setattr(probe, "probe", lambda p, r: (True, True, 200))
+    monkeypatch.setattr(probe, "fetch_meta", lambda p: None)
+    my_lockfile(sup, "d1", port=8077)
+    st = sup.state(entry("d1", port=8077))
+    assert st["status"] == "live" and st["last_stop_reason"] is None
+
+
+def test_status_clean_stop_reason(sup, monkeypatch):
+    sup.procs["d1"] = FakeProc()
+    my_lockfile(sup, "d1", port=None)
+    monkeypatch.setattr(sup, "_killpg", lambda *a, **k: None)
+    assert sup.stop(entry("d1", port=None))["ok"] is True
+    monkeypatch.setattr(probe, "port_open", lambda p: False)
+    st = sup.state(entry("d1", port=None))
+    assert st["state"] == "stopped" and st["status"] == "stopped"
+    assert st["last_stop_reason"] == {"kind": "clean"}
+
+
+def test_status_crash_reason(sup):
+    sup.procs["d1"] = FakeProc(returncode=3)
+    st = sup.state(entry("d1", port=None))
+    assert st["state"] == "crashed" and st["status"] == "stopped"
+    assert st["last_stop_reason"]["kind"] == "crash" and st["last_stop_reason"]["exit"] == 3
+
+
+def test_never_started_has_no_reason(sup, monkeypatch):
+    monkeypatch.setattr(probe, "port_open", lambda p: False)
+    monkeypatch.setattr(probe, "probe", lambda p, r: (False, True, None))
+    st = sup.state(entry("d1", port=8077))
+    assert st["status"] == "stopped" and st["last_stop_reason"] is None
+
+
+def test_start_clears_stop_mark(sup, paths):
+    sup._write_stop("d1")
+    assert paths.stopmark("d1").exists()
+    sup.start(entry("d1", port=None))
+    assert not paths.stopmark("d1").exists()
+
+
+def test_reap_keeps_markers(sup, paths):
+    sup._write_stop("d1")
+    sup.reap_on_boot()                       # markers are not lockfiles → must survive
+    assert paths.stopmark("d1").exists()
