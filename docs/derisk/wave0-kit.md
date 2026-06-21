@@ -29,7 +29,7 @@ exercises the seam with **real processes**, through the **real discriminator pat
 | R4 | A dead/misbehaving child can't crash the proxy | **RETIRED** | dead→502, throwing handler→500 (child survives), ghost→404; sampler structurally isolated |
 | R6 | Additive over the proven engine | **RETIRED** | `proxy_post` sibling of `proxy_get`; one route; discriminator reconciled; 59 tests green |
 | R3 | Contract is sufficient as a full **control surface** | **RESIDUAL** | transport+no-op+405+throw proven; completeness (below) is named Wave-1/2 decisions |
-| R5 | Contract is language-agnostic (Node kit, Wave 1) | **RESIDUAL** | plain HTTP+JSON; **re-run this gate at Wave 1** before building jobsearch |
+| R5 | Contract is language-agnostic (Node kit) | **RETIRED** (Wave 1) | `kits/node/dod-kit.js` + `test_kit_node.py`: a real `node` kit is discovered (render→spec) and action-round-trips through dod; jobsearch rewritten on it |
 | R7 | Spec stays semantic (text/sound later) | **ACCEPTED (out of scope)** | dashkit atoms; not built in v1 |
 
 ## Residual Constitution decisions (settle before the code that needs them)
@@ -53,6 +53,12 @@ exercises the seam with **real processes**, through the **real discriminator pat
 - **Manifest is a discovered file, not a wire endpoint** — `dod.project.json` read by the
   generalized provider; resolves the scrutiny's "manifest-over-wire" concern (it was a misread of
   the design).
+
+## Wave 1 — DONE (2026-06-21)
+
+- **skills** wrapped: stays a durable registry project (closed macOS app, `open -a`, `stop:leave`); live in the panel.
+- **jobsearch** rewritten to the kit: `job-search/board.js` (Node kit) emits the hiring funnel as a spec (stats + by-stage hbar + live-funnel table + per-target **advance** action), discovered via `job-search/dod.project.json` (`provider=manifest`). Legacy `server.js`/`pipeline.html` left in place but superseded; full per-field editing not ported (advance only — more actions later).
+- Daemon reloaded; catalog is now **skills + jobsearch** only. PDD provider disabled until **Wave 2** (control surfaces) — where the residual action decisions (concurrency, result-size, long-running/async) must be settled before "kick a run"-style actions.
 
 ## Carve decision carried into Wave 0
 
