@@ -69,7 +69,12 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
 .dk-cloud span{white-space:nowrap}
 .dk-acts{display:flex;flex-wrap:wrap;gap:6px}
 .dk-btn{cursor:pointer;border:1px solid var(--dk-line);background:var(--dk-panel);color:var(--dk-fg);border-radius:6px;padding:5px 12px;font:inherit}
-.dk-btn:hover{border-color:var(--dk-accent);color:var(--dk-accent)} .dk-btn[disabled]{opacity:.4;cursor:not-allowed}`;
+.dk-btn:hover{border-color:var(--dk-accent);color:var(--dk-accent)} .dk-btn[disabled]{opacity:.4;cursor:not-allowed}
+.dk-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:6px 0 10px}
+.dk-f{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0} .dk-f.dk-full{grid-column:1/-1}
+.dk-fl{color:var(--dk-muted);font-size:11px}
+.dk-f input,.dk-f select,.dk-f textarea{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius:6px;color:var(--dk-fg);font:inherit;font-size:13px;padding:6px 8px;width:100%}
+.dk-f textarea{min-height:84px;resize:vertical} .dk-fcheck{flex-direction:row;align-items:center;gap:7px}`;
 
   function injectCSS() {
     if (document.getElementById('dk-css')) return;
@@ -261,6 +266,23 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
       `<button class="dk-btn ${esc(b.tone || '')}" onclick="dashkit._fire(this)" data-action="${esc(b.action || '')}" data-payload='${esc(JSON.stringify(b.payload || {}))}'>${esc(b.label || b.action || 'action')}</button>`).join('');
     return `<div class="dk-panel dk-full">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}<div class="dk-acts">${btns}</div></div>`;
   }
+  // input atoms: a form whose fields edit values and submit them as one action. The render
+  // poll is suspended while a field is focused/dirty (see _busy) so typing isn't clobbered.
+  function fieldHtml(fid, f) {
+    const nm = `data-form="${esc(fid)}" data-key="${esc(f.key)}"`;
+    const on = `oninput="dashkit._dirty('${esc(fid)}')" onchange="dashkit._dirty('${esc(fid)}')"`;
+    const lab = `<span class="dk-fl">${esc(f.label || f.key)}</span>`;
+    const v = f.value == null ? '' : f.value;
+    if (f.kind === 'textarea') return `<label class="dk-f dk-full">${lab}<textarea ${nm} ${on}>${esc(v)}</textarea></label>`;
+    if (f.kind === 'select') return `<label class="dk-f">${lab}<select ${nm} ${on}>${(f.options || []).map(o => `<option value="${esc(o.value)}"${String(o.value) === String(f.value) ? ' selected' : ''}>${esc(o.label || o.value)}</option>`).join('')}</select></label>`;
+    if (f.kind === 'checkbox') return `<label class="dk-f dk-fcheck"><input type="checkbox" ${nm} ${on}${f.value ? ' checked' : ''}>${lab}</label>`;
+    return `<label class="dk-f">${lab}<input type="${f.kind === 'number' ? 'number' : 'text'}" ${nm} value="${esc(v)}" ${on}></label>`;
+  }
+  function formPanel(p) {
+    const fid = p.id || ('form-' + (p.action || 'x'));
+    const fields = (p.fields || []).map(f => fieldHtml(fid, f)).join('');
+    return `<div class="dk-panel dk-full" data-formroot="${esc(fid)}" data-action="${esc(p.action || 'save')}" data-context='${esc(JSON.stringify(p.context || {}))}'>${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}<div class="dk-form">${fields}</div><div class="dk-acts"><button class="dk-btn" onclick="dashkit._submit('${esc(fid)}')">${esc(p.submitLabel || 'Save')}</button>${p.cancelAction ? `<button class="dk-btn" onclick="dashkit._cancel('${esc(fid)}','${esc(p.cancelAction)}')">Cancel</button>` : ''}</div></div>`;
+  }
   function panel(p) {
     try {
       switch (p && p.type) {
@@ -275,6 +297,7 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
         case 'badge': return `<div class="dk-panel"><span class="dk-pill ${esc(p.tone || '')}">${esc(p.text || '')}</span></div>`;
         case 'button': return actionsPanel({ buttons: [p], title: p.title });
         case 'actions': return actionsPanel(p);
+        case 'form': return formPanel(p);
         case 'prose': return `<div class="dk-panel dk-full dk-prose">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}${String(p.text || '').split(/\n\s*\n/).filter(s => s.trim()).map(s => `<p>${esc(s.trim())}</p>`).join('')}</div>`;
         case 'html': return `<div class="dk-panel dk-full">${p.html || ''}</div>`;   // first-party escape hatch (NOT escaped)
         default: return `<div class="dk-panel dk-full"><span class="dk-muted">unknown atom: ${esc(p && p.type)}</span></div>`;
@@ -300,6 +323,35 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
     _action(elm.getAttribute('data-action') || '', payload);
   }
 
+  // ── form input atoms: dirty-tracking + submit + no-clobber ──
+  const _dirtyForms = new Set();
+  const cssEsc = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&');
+  function _dirty(fid) { _dirtyForms.add(fid); }
+  function _busy(el) {                          // true while the user is mid-edit → skip the poll
+    const a = document.activeElement;
+    if (a && el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+    return _dirtyForms.size > 0;
+  }
+  function _submit(fid) {
+    const root = document.querySelector(`[data-formroot="${cssEsc(fid)}"]`);
+    if (!root || !_action) return;
+    const values = {};
+    root.querySelectorAll(`[data-form="${cssEsc(fid)}"]`).forEach((inp) => {
+      const k = inp.getAttribute('data-key');
+      values[k] = inp.type === 'checkbox' ? inp.checked
+        : inp.type === 'number' ? (inp.value === '' ? null : Number(inp.value))
+          : inp.value;
+    });
+    let ctx = {};
+    try { ctx = JSON.parse(root.getAttribute('data-context') || '{}'); } catch (e) {}
+    Promise.resolve(_action(root.getAttribute('data-action') || 'save', { ...ctx, values }))
+      .finally(() => _dirtyForms.delete(fid));   // clear dirty → poll resumes & shows the saved value
+  }
+  function _cancel(fid, action) {
+    _dirtyForms.delete(fid);
+    if (_action) _action(action || 'cancel', {});
+  }
+
   function mount(opts) {
     injectCSS();
     _action = opts.onAction
@@ -307,11 +359,14 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
         : null);
     const el = (typeof opts.mount === 'string' ? document.querySelector(opts.mount) : opts.mount) || document.body;
     let stopped = false, timer = null;
+    const reschedule = (ms) => { timer = setTimeout(tick, ms); };
     async function tick() {
       if (stopped) return;
+      if (_busy(el)) return reschedule(opts.refreshMs || 3000);   // mid-edit → don't clobber inputs
       try {
         const spec = await (await fetch(opts.renderUrl, { cache: 'no-store' })).json();
         if (stopped) return;
+        if (_busy(el)) return reschedule(opts.refreshMs || spec.refresh_ms || 3000);
         renderSpec(spec, el);
         timer = setTimeout(tick, opts.refreshMs || spec.refresh_ms || 3000);
       } catch (e) {
@@ -323,5 +378,5 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
     return { stop() { stopped = true; if (timer) clearTimeout(timer); } };
   }
 
-  window.dashkit = { mount, renderSpec, version: '1', _wc, _fire };
+  window.dashkit = { mount, renderSpec, version: '1', _wc, _fire, _dirty, _submit, _cancel };
 })();
