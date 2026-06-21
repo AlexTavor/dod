@@ -70,6 +70,20 @@ def proxy_get(port: int, path: str) -> tuple[int, bytes]:
         return 502, json.dumps({"error": f"upstream {port}: {e}"}).encode()
 
 
+def proxy_post(port: int, path: str, data: bytes, ctype: str = "application/json") -> tuple[int, bytes]:
+    """Server-side POST of an action to a child (the interact-down half of the kit).
+    dod's edge is what's token-guarded; dod→child is trusted loopback."""
+    try:
+        req = urllib.request.Request(f"http://{HOST}:{int(port)}{path}", data=data, method="POST")
+        req.add_header("Content-Type", ctype)
+        with urllib.request.urlopen(req, timeout=4.0) as r:
+            return r.status, r.read(2_000_000)
+    except urllib.error.HTTPError as e:
+        return e.code, (e.read(100_000) or b"{}")
+    except Exception as e:  # noqa: BLE001
+        return 502, json.dumps({"error": f"upstream {port}: {e}"}).encode()
+
+
 def log_tail(path: Path, n: int = 1400) -> str:
     try:
         with open(path, "rb") as f:

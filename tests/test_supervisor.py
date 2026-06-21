@@ -155,4 +155,5 @@ def test_state_port_busy_foreign(sup, monkeypatch):
 
 def test_state_stopped(sup, monkeypatch):
     monkeypatch.setattr(probe, "port_open", lambda p: False)
+    monkeypatch.setattr(probe, "probe", lambda p, r: (False, True, None))   # hermetic: no real socket
     assert sup.state(entry("d1", port=8077))["state"] == "stopped"

@@ -20,7 +20,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler
 
 from .config import CONTRACT, ID_RE, WEB_DIR
-from .probe import log_tail, proxy_get
+from .probe import log_tail, proxy_get, proxy_post
 
 
 def make_handler(app):
@@ -112,6 +112,16 @@ def make_handler(app):
                 return
             body = self._body()
             eid = body.get("id", "")
+            if action == "action":          # interact-down: route a UI action to the project logic
+                if not ID_RE.match(eid):
+                    return self._send(400, json.dumps({"error": "bad id"}))
+                port = (app.registry.get(eid) or {}).get("port")
+                if not port:
+                    return self._send(404, json.dumps({"error": "unknown id or no port"}))
+                payload = json.dumps({"action": body.get("action"),
+                                      "payload": body.get("payload") or {}}).encode()
+                code, data = proxy_post(int(port), "/api/action", payload)
+                return self._send(code, data)
             if action == "add":
                 return self._add(body)
             if action == "forget":
