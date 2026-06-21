@@ -66,6 +66,10 @@ class Paths:
         return self.home / "ports.json"
 
     @property
+    def order(self) -> Path:           # user's drag-to-reorder ordering of the panel
+        return self.home / "order.json"
+
+    @property
     def token(self) -> Path:           # per-boot secret, mode 600
         return self.home / "token"
 
@@ -97,4 +101,4 @@ class Paths:
 
 # Files in the home dir that are NOT child lockfiles (so reap-on-boot skips them).
 RESERVED_FILES = {"local.json", "state.json", "server.json", "discovered.json",
-                  "registry.json", "ports.json", "token"}
+                  "registry.json", "ports.json", "order.json", "token"}

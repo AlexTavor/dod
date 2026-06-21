@@ -13,6 +13,13 @@ def test_start_web_records_lockfile_and_clears_crash(sup, paths, fake_spawn):
     assert len(fake_spawn.calls) == 1
 
 
+def test_start_guard_blocks_double_spawn(sup, fake_spawn):
+    sup.procs["d1"] = FakeProc()                 # already starting (poll() is None)
+    res = sup.start(entry("d1", port=None))
+    assert res.get("note") == "already starting"
+    assert len(fake_spawn.calls) == 0            # did not spawn a second instance (the EADDRINUSE cause)
+
+
 def test_start_terminal_is_launch_record_only(sup, paths):
     res = sup.start(entry("t1", type="terminal", cmd=["echo", "hi"]))
     assert res["state"] == "launched"

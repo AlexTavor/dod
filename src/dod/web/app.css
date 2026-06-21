@@ -14,6 +14,7 @@ header b{font-weight:600;letter-spacing:.05em;font-size:14px}
 #list{border-right:1px solid var(--line);overflow:auto;padding:8px}
 .item{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:10px 11px;border:1px solid transparent;border-radius:9px;cursor:pointer;margin-bottom:4px}
 .item:hover{background:var(--hover)} .item.sel{background:var(--active);border-color:var(--line)}
+.item:active{cursor:grabbing} .item[draggable=true]{cursor:grab}
 .item .nm{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .item .desc{grid-column:1/2;color:var(--muted);font-size:12px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .item .right{grid-row:1/3;grid-column:2;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:8px}

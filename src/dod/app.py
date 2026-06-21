@@ -18,7 +18,7 @@ from .providers.pdd import PddProvider
 from .registry import Registry
 from .sampler import run_sampler
 from .supervisor import Supervisor
-from .util import write_json
+from .util import load_json, write_json
 
 
 def default_providers(paths: Paths) -> list:
@@ -28,7 +28,9 @@ def default_providers(paths: Paths) -> list:
 class App:
     def __init__(self, paths: Paths, providers=None, token: str | None = None, clock=time.time):
         self.paths = paths.ensure()
-        self.token = token or secrets.token_hex(16)
+        # Persistent token: reuse the on-disk one across restarts so an open browser tab
+        # stays valid through a daemon reload (per-boot rotation 403'd live tabs silently).
+        self.token = token or self._load_or_make_token()
         self.clock = clock
         self.registry = Registry(paths, providers=providers if providers is not None else default_providers(paths))
         self.supervisor = Supervisor(paths, self.registry, clock=clock)
@@ -38,9 +40,24 @@ class App:
         self._serving = False
         self._stop = threading.Event()
 
+    def _load_or_make_token(self) -> str:
+        try:
+            t = self.paths.token.read_text(encoding="utf-8").strip()
+            if t:
+                return t
+        except FileNotFoundError:
+            pass
+        return secrets.token_hex(16)
+
     def snapshot(self) -> list[dict]:
+        order = load_json(self.paths.order).get("order", [])
+        rank = {eid: i for i, eid in enumerate(order)}    # user's drag order; unranked → end, by id
         with self.lock:
-            return sorted(self.states.values(), key=lambda r: r["id"])
+            rows = list(self.states.values())
+        return sorted(rows, key=lambda r: (rank.get(r["id"], len(rank)), r["id"]))
+
+    def set_order(self, ids: list[str]) -> None:
+        write_json(self.paths.order, {"order": [str(i) for i in ids]})
 
     # ── runtime files (token = the agent-control trust boundary) ────────
     def write_runtime_files(self, port: int) -> None:
@@ -52,8 +69,8 @@ class App:
 
     def shutdown(self, *_a) -> None:
         self.supervisor.shutdown()                  # die-with-dod: kill every owned child
-        if self._serving:                           # only the server revokes its own token
-            self.paths.token.unlink(missing_ok=True)
+        if self._serving:
+            # keep the token across restarts (open tabs stay valid); only drop conn info
             self.paths.server.unlink(missing_ok=True)
 
     def serve(self, port: int) -> int:

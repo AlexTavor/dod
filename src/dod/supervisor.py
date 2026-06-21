@@ -132,6 +132,10 @@ class Supervisor:
             self._write_lock(eid, -1, None, None, e["cmd"])   # launch record only
             return {"ok": True, "state": "launched"}
 
+        existing = self.procs.get(eid)        # guard the double-spawn race (two fast Starts → EADDRINUSE)
+        if existing is not None and existing.poll() is None:
+            return {"ok": True, "state": "starting", "note": "already starting"}
+
         port = e.get("port")
         if port and net.port_open(int(port)):
             ok, _, _ = net.probe(int(port), e.get("ready", {}))

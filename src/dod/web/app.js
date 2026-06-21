@@ -4,6 +4,7 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 let STATE = [], SEL = null, FRAMED = null, MOUNT = null;
+let DRAG = null, dragging = false;
 const byId = id => STATE.find(e => e.id === id);
 const isLive = e => e.status === 'live';
 function stopMount() { if (MOUNT) { try { MOUNT.stop(); } catch (e) {} MOUNT = null; } }
@@ -13,9 +14,11 @@ async function post(action, payload) {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Dod-Token': TOKEN },
     body: JSON.stringify(payload || {})
   });
+  if (r.status === 403) { location.reload(); return {}; }   // token rotated (dod restarted) → refresh
   return r.json().catch(() => ({}));
 }
 async function tick() {
+  if (dragging) return;                       // don't re-render mid-drag
   let d; try { d = await (await fetch('/api/state')).json(); } catch (e) { return; }
   STATE = (d.entries || []).filter(e => e.state !== 'archived');
   if (SEL && !byId(SEL)) SEL = null;
@@ -44,13 +47,32 @@ function rowButton(e) {
 function renderList() {
   $('#list').innerHTML = STATE.map(e => {
     const [word, cls] = statusWord(e);
-    return `<div class="item ${e.id === SEL ? 'sel' : ''}" onclick="pick('${e.id}')">
+    return `<div class="item ${e.id === SEL ? 'sel' : ''}" draggable="true"
+      ondragstart="dragStart(event,'${e.id}')" ondragover="event.preventDefault()" ondrop="dropOn(event,'${e.id}')"
+      onclick="pick('${e.id}')">
       <div class="nm">${esc(e.name)}</div>
       <div class="right"><span class="pill ${cls}">${esc(word)}</span>${rowButton(e)}</div>
       <div class="desc">${esc(e.blurb || '')}</div>
     </div>`;
   }).join('') || '<div class="empty" style="padding:30px">No projects. Add a dod.project.json to a project, or register one with the CLI.</div>';
 }
+function dragStart(ev, id) {
+  DRAG = id; dragging = true;
+  try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', id); } catch (e) {}
+}
+function dropOn(ev, targetId) {
+  ev.preventDefault(); dragging = false;
+  if (!DRAG || DRAG === targetId) { DRAG = null; return; }
+  const ids = STATE.map(e => e.id);
+  const from = ids.indexOf(DRAG), to = ids.indexOf(targetId);
+  DRAG = null;
+  if (from < 0 || to < 0) return;
+  ids.splice(to, 0, ids.splice(from, 1)[0]);
+  STATE.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));   // optimistic; server persists the order
+  render();
+  post('reorder', { order: ids });
+}
+document.addEventListener('dragend', () => { dragging = false; });
 
 function renderDetail() {
   const host = $('#detail');
@@ -106,7 +128,7 @@ function renderDetail() {
 async function pick(id) { SEL = id; FRAMED = null; render(); }   // select only — never starts
 async function act(verb, id) {
   const r = await post(verb, { id });
-  if (r && r.ok === false && r.error) alert(`${verb} failed: ${r.error}${r.detail ? '\n' + r.detail : ''}`);
+  if (r && (r.ok === false || r.error)) alert(`${verb} failed: ${r.error || 'unknown'}${r.detail ? '\n' + r.detail : ''}`);
   FRAMED = null;
   setTimeout(tick, 250);
 }

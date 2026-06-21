@@ -122,6 +122,12 @@ def make_handler(app):
                                       "payload": body.get("payload") or {}}).encode()
                 code, data = proxy_post(int(port), "/api/action", payload)
                 return self._send(code, data)
+            if action == "reorder":
+                ids = body.get("order")
+                if not isinstance(ids, list):
+                    return self._send(400, json.dumps({"error": "order must be a list of ids"}))
+                app.set_order(ids)
+                return self._send(200, json.dumps({"ok": True}))
             if action == "add":
                 return self._add(body)
             if action == "forget":
