@@ -5,16 +5,12 @@
 </head>
 <body><div id="app">
   <header>
-    <b>dod</b><span class="tagline">dashboard of dashboards</span>
-    <span id="count" class="count"></span>
+    <b>dod</b><span class="tagline">project control</span>
     <span class="spacer"></span>
-    <button class="btn" onclick="probe()" title="scan registry ports for dashkit dashboards">probe</button>
+    <span id="count" class="count"></span>
   </header>
-  <nav id="nav"></nav>
-  <main>
-    <div id="stage"></div>
-    <div id="drawer"></div>
-  </main>
+  <aside id="list"></aside>
+  <main id="detail"></main>
 </div>
 <script>const TOKEN="__TOKEN__";</script>
 <script src="/app.js"></script>

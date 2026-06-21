@@ -66,7 +66,10 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
 .dk-tg-b{border:0;border-right:1px solid var(--dk-line);background:var(--dk-panel);color:var(--dk-muted);font:inherit;font-size:12px;padding:3px 10px;cursor:pointer}
 .dk-tg-b:last-child{border-right:0} .dk-tg-b.on{color:var(--dk-accent);background:var(--dk-bg)} .dk-tg-b:hover{color:var(--dk-fg)}
 .dk-cloud{display:flex;flex-wrap:wrap;gap:4px 13px;align-items:baseline;padding:8px 2px;line-height:1.25}
-.dk-cloud span{white-space:nowrap}`;
+.dk-cloud span{white-space:nowrap}
+.dk-acts{display:flex;flex-wrap:wrap;gap:6px}
+.dk-btn{cursor:pointer;border:1px solid var(--dk-line);background:var(--dk-panel);color:var(--dk-fg);border-radius:6px;padding:5px 12px;font:inherit}
+.dk-btn:hover{border-color:var(--dk-accent);color:var(--dk-accent)} .dk-btn[disabled]{opacity:.4;cursor:not-allowed}`;
 
   function injectCSS() {
     if (document.getElementById('dk-css')) return;
@@ -251,6 +254,13 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
     const text = p.text != null ? p.text : (p.lines || []).join('\n');
     return `<div class="dk-panel dk-full">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}<pre class="dk-log">${esc(text)}</pre></div>`;
   }
+  // interact-down: a button carries {action,payload}; _fire routes it to the host's
+  // handler (dod's proxy in the deck pane, or the dashboard's own /api/action standalone).
+  function actionsPanel(p) {
+    const btns = (p.buttons || []).map(b =>
+      `<button class="dk-btn ${esc(b.tone || '')}" onclick="dashkit._fire(this)" data-action="${esc(b.action || '')}" data-payload='${esc(JSON.stringify(b.payload || {}))}'>${esc(b.label || b.action || 'action')}</button>`).join('');
+    return `<div class="dk-panel dk-full">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}<div class="dk-acts">${btns}</div></div>`;
+  }
   function panel(p) {
     try {
       switch (p && p.type) {
@@ -263,6 +273,8 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
         case 'kv': return kvPanel(p);
         case 'log': return logPanel(p);
         case 'badge': return `<div class="dk-panel"><span class="dk-pill ${esc(p.tone || '')}">${esc(p.text || '')}</span></div>`;
+        case 'button': return actionsPanel({ buttons: [p], title: p.title });
+        case 'actions': return actionsPanel(p);
         case 'prose': return `<div class="dk-panel dk-full dk-prose">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}${String(p.text || '').split(/\n\s*\n/).filter(s => s.trim()).map(s => `<p>${esc(s.trim())}</p>`).join('')}</div>`;
         case 'html': return `<div class="dk-panel dk-full">${p.html || ''}</div>`;   // first-party escape hatch (NOT escaped)
         default: return `<div class="dk-panel dk-full"><span class="dk-muted">unknown atom: ${esc(p && p.type)}</span></div>`;
@@ -278,8 +290,21 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
     el.innerHTML = `${spec && spec.title ? `<div class="dk-title">${esc(spec.title)}</div>` : ''}<div class="dk-panels">${panels.map(panel).join('')}</div>`;
   }
 
+  // The active action handler: onAction(action,payload) in dod's pane, or a POST to
+  // actionUrl for a standalone dashboard. Null → buttons no-op.
+  let _action = null;
+  function _fire(elm) {
+    if (!_action) return;
+    let payload = {};
+    try { payload = JSON.parse(elm.getAttribute('data-payload') || '{}'); } catch (e) {}
+    _action(elm.getAttribute('data-action') || '', payload);
+  }
+
   function mount(opts) {
     injectCSS();
+    _action = opts.onAction
+      || (opts.actionUrl ? (a, p) => fetch(opts.actionUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: a, payload: p }) }).catch(() => {})
+        : null);
     const el = (typeof opts.mount === 'string' ? document.querySelector(opts.mount) : opts.mount) || document.body;
     let stopped = false, timer = null;
     async function tick() {
@@ -298,5 +323,5 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
     return { stop() { stopped = true; if (timer) clearTimeout(timer); } };
   }
 
-  window.dashkit = { mount, renderSpec, version: '1', _wc };
+  window.dashkit = { mount, renderSpec, version: '1', _wc, _fire };
 })();

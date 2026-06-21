@@ -33,7 +33,7 @@ SHIM = """<!doctype html><html><head><meta charset="utf-8"><title>__TITLE__</tit
 <style>html,body{margin:0;height:100%;background:#16140f}</style>
 <script src="/dashkit.js"></script></head>
 <body><div id="dk"></div>
-<script>dashkit.mount({renderUrl:'/api/render', mount:'#dk'});</script></body></html>"""
+<script>dashkit.mount({renderUrl:'/api/render', mount:'#dk', actionUrl:'/api/action'});</script></body></html>"""
 
 
 def make_handler(meta: dict, render, on_action=None):
