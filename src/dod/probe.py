@@ -86,7 +86,7 @@ def proxy_post(port: int, path: str, data: bytes, ctype: str = "application/json
 
 def log_tail(path: Path, n: int = 1400) -> str:
     try:
-        with open(path, "rb") as f:
+        with path.open("rb") as f:
             try:
                 f.seek(-n, os.SEEK_END)
             except OSError:

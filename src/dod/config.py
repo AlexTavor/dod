@@ -42,7 +42,7 @@ class Paths:
     home: Path
 
     @classmethod
-    def create(cls, home: Path | str | None = None) -> "Paths":
+    def create(cls, home: Path | str | None = None) -> Paths:
         return cls(home=Path(home) if home else default_home())
 
     @property
@@ -93,7 +93,7 @@ class Paths:
     def stopmark(self, eid: str) -> Path:
         return self.run / f"{eid}.stop.json"
 
-    def ensure(self) -> "Paths":
+    def ensure(self) -> Paths:
         self.home.mkdir(parents=True, exist_ok=True)
         self.run.mkdir(parents=True, exist_ok=True)
         return self

@@ -13,11 +13,13 @@ POST  /api/{start,stop,restart,archive,unarchive,add,forget,probe,pin,ignore}  g
 """
 from __future__ import annotations
 
+import contextlib
 import hmac
 import json
 import re
 import urllib.parse
-from http.server import BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import cast
 
 from .config import CONTRACTS, ID_RE, WEB_DIR
 from .probe import log_tail, proxy_get, proxy_post
@@ -36,10 +38,8 @@ def make_handler(app):
             if no_cache:
                 self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self.end_headers()
-            try:
+            with contextlib.suppress(BrokenPipeError):
                 self.wfile.write(data)
-            except BrokenPipeError:
-                pass
 
         def _static(self, name, ctype):
             try:
@@ -52,8 +52,8 @@ def make_handler(app):
 
         def _guard(self) -> bool:
             origin = self.headers.get("Origin")
-            allowed = {f"http://127.0.0.1:{self.server.server_port}",
-                       f"http://localhost:{self.server.server_port}"}
+            port = cast(HTTPServer, self.server).server_port
+            allowed = {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
             if origin and origin not in allowed:
                 self._send(403, json.dumps({"error": "bad origin"}))
                 return False
@@ -109,7 +109,7 @@ def make_handler(app):
             if action == "announce":
                 return self._announce()
             if not self._guard():
-                return
+                return None
             body = self._body()
             eid = body.get("id", "")
             if action == "action":          # interact-down: route a UI action to the project logic

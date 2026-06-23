@@ -19,22 +19,33 @@ Fixed here (the "graveyard" defects):
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import subprocess
 import threading
 import time
+from typing import Protocol
 
 from . import probe as net
 from .config import LOG_CAP, Paths
 from .util import load_json, write_json
 
 
+class ProcHandle(Protocol):
+    """The slice of ``subprocess.Popen`` the supervisor depends on, so an injected fake
+    (tests) and a real Popen both satisfy it structurally."""
+
+    pid: int
+
+    def poll(self) -> int | None: ...
+
+
 def _default_spawn(cmd, cwd, env, log_path):
     """Real subprocess spawn. Injectable so tests can run without real processes."""
     if log_path is not None:
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        logf = open(log_path, "ab")
+        logf = log_path.open("ab")  # fd is dup'd into the child, then closed in the finally below
         if logf.tell() > LOG_CAP:
             logf.truncate(0)
             logf.seek(0)
@@ -73,7 +84,7 @@ class Supervisor:
         self._spawn = spawn or _default_spawn
         self.clock = clock
         self.lock = threading.Lock()
-        self.procs: dict[str, object] = {}        # children THIS dod launched this session
+        self.procs: dict[str, ProcHandle] = {}    # children THIS dod launched this session
         self.started_at: dict[str, float] = {}
 
     # ── lockfiles + crash markers ───────────────────────────────────────
@@ -163,10 +174,8 @@ class Supervisor:
     def _killpg(pgid, hard=False):
         if not pgid or pgid <= 1:
             return
-        try:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
             os.killpg(pgid, signal.SIGKILL if hard else signal.SIGTERM)
-        except (ProcessLookupError, PermissionError):
-            pass
 
     def _wait_port_closed(self, port: int, timeout: float) -> bool:
         deadline = time.monotonic() + timeout
@@ -205,12 +214,14 @@ class Supervisor:
             self._killpg(pgid, hard=True)
         # VERIFY the socket actually released before claiming success — escalate once.
         port = e.get("port")
-        if port:
-            if not self._wait_port_closed(int(port), timeout=4.0):
-                self._killpg(pgid, hard=True)
-                if not self._wait_port_closed(int(port), timeout=2.0):
-                    return {"ok": False, "error": f"port {port} still bound after stop",
-                            "detail": "process did not release the socket; it may have escaped its process group"}
+        if port and not self._wait_port_closed(int(port), timeout=4.0):
+            self._killpg(pgid, hard=True)
+            if not self._wait_port_closed(int(port), timeout=2.0):
+                return {
+                    "ok": False,
+                    "error": f"port {port} still bound after stop",
+                    "detail": "process did not release the socket; it may have escaped its process group",
+                }
         with self.lock:
             self.procs.pop(eid, None)
         self._clear_marks(eid)
@@ -258,10 +269,8 @@ class Supervisor:
         This is what makes 'die with dod' actually hold."""
         killed = set()
         for eid, p in list(self.procs.items()):
-            try:
+            with contextlib.suppress(Exception):  # group may already be reaped
                 self._killpg(os.getpgid(p.pid))
-            except Exception:  # noqa: BLE001
-                pass
             killed.add(eid)
             self.paths.lock(eid).unlink(missing_ok=True)
         if self.paths.run.exists():
@@ -272,7 +281,7 @@ class Supervisor:
                 if eid in killed:
                     continue
                 lf = self._read_lock(eid)
-                if self._owns(lf):
+                if lf and self._owns(lf):
                     self._killpg(lf.get("pgid"))
                     lp.unlink(missing_ok=True)
 
