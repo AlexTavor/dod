@@ -11,6 +11,7 @@ dist/
 build/
 *.egg-info/
 .DS_Store
+node_modules/
 
 # Local Claude Code settings (machine-specific permission grants)
 .claude/settings.local.json
