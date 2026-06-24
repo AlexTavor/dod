@@ -2,11 +2,13 @@ import { html, render } from 'lit';
 
 import type { Spec } from '../types';
 import { panel } from './atoms';
+import { injectCSS } from './theme';
 
 export const version = '1';
 
 /** Render a spec into an element. Synchronous and idempotent (safe to call every poll). */
 export function renderSpec(spec: Spec, el: HTMLElement): void {
+  injectCSS();
   el.classList.add('dk-root');
   const panels = spec.panels ?? [];
   render(

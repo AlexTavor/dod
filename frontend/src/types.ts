@@ -1,9 +1,9 @@
 // The dashkit spec contract: a backend (the Python daemon or a kit) emits a flat spec and
 // dashkit renders it. These shapes mirror what src/dod/kit.py and dashboards produce.
 //
-// W1 types the two atoms the skeleton renders (section, stat). The rest of the atom union
-// (chart, table, kv, log, wordcloud, form, actions, badge, prose, html) is filled in in W2,
-// and the dod admin-UI types (Entry/State, mirroring src/dod/models.py) arrive in W3.
+// W1 added section + stat. W2a adds the stateless atoms below. Charts (ChartPanel) land in
+// W2b; the interactive atoms (wordcloud, actions/button, form) land in W4; the dod admin-UI
+// types (Entry/State, mirroring src/dod/models.py) arrive in W3.
 
 export interface Spec {
   title?: string;
@@ -23,10 +23,75 @@ export interface StatPanel {
   sub?: string;
 }
 
+export interface ProgressPanel {
+  type: 'progress';
+  label?: string;
+  value?: number;
+  max?: number;
+  pct?: number;
+  text?: string;
+}
+
+export interface TablePanel {
+  type: 'table';
+  title?: string;
+  columns?: string[];
+  rows?: Array<Array<string | number>>;
+  /** Per-column alignment; 'right' or 'num' right-aligns and uses tabular figures. */
+  align?: string[];
+}
+
+export interface KvItem {
+  k: string;
+  v: string | number;
+}
+
+export interface KvPanel {
+  type: 'kv';
+  title?: string;
+  items?: KvItem[];
+}
+
+export interface LogPanel {
+  type: 'log';
+  title?: string;
+  text?: string;
+  lines?: string[];
+}
+
+export interface BadgePanel {
+  type: 'badge';
+  /** ok | done | run | accent | warn | err — maps to a pill colour. */
+  tone?: string;
+  text?: string;
+}
+
+export interface ProsePanel {
+  type: 'prose';
+  title?: string;
+  text?: string;
+}
+
+/** First-party escape hatch: html is inserted unescaped. Never feed it untrusted input. */
+export interface HtmlPanel {
+  type: 'html';
+  html?: string;
+}
+
 /** Any atom dashkit does not (yet) know: rendered as a labelled fallback, never thrown. */
 export interface UnknownPanel {
   type: string;
   [key: string]: unknown;
 }
 
-export type Panel = SectionPanel | StatPanel | UnknownPanel;
+export type Panel =
+  | SectionPanel
+  | StatPanel
+  | ProgressPanel
+  | TablePanel
+  | KvPanel
+  | LogPanel
+  | BadgePanel
+  | ProsePanel
+  | HtmlPanel
+  | UnknownPanel;
