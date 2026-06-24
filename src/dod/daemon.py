@@ -12,6 +12,7 @@ import plistlib
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from .config import DEFAULT_PORT, Paths
 
@@ -28,7 +29,7 @@ def _program_args(port: int) -> list[str]:
     return [sys.executable, "-m", "dod", "--port", str(port)]
 
 
-def build_plist(paths: Paths, port: int) -> dict:
+def build_plist(paths: Paths, port: int) -> dict[str, Any]:
     log = paths.run / "daemon.log"
     paths.ensure()
     env = {"DOD_HOME": str(paths.home),

@@ -56,10 +56,7 @@ ignore = [
 files = ["src/dod"]
 mypy_path = "src"
 python_version = "3.10"
-warn_unused_configs = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-# Ratchet target (M3, once entries/states are TypedDict/dataclasses): enable `strict`.
+strict = true
 
 [tool.coverage.run]
 source = ["dod"]

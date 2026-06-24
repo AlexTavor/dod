@@ -10,6 +10,7 @@ import os
 import shlex
 import urllib.error
 import urllib.request
+from typing import Any
 
 from .config import DEFAULT_PORT, HOST, Paths
 from .util import load_json
@@ -34,7 +35,8 @@ def _client_token(paths: Paths) -> str:
         return ""
 
 
-def _api(paths: Paths, method: str, path: str, payload: dict | None = None) -> tuple[int, dict]:
+def _api(paths: Paths, method: str, path: str,
+         payload: dict[str, Any] | None = None) -> tuple[int, dict[str, Any]]:
     url = _client_url(paths) + path
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(url, data=data, method=method)
@@ -56,12 +58,12 @@ def _api(paths: Paths, method: str, path: str, payload: dict | None = None) -> t
                             f"or `dod daemon install`"}
 
 
-def _state_rows(paths: Paths) -> list[dict]:
+def _state_rows(paths: Paths) -> list[dict[str, Any]]:
     code, body = _api(paths, "GET", "/api/state")
     return body.get("entries", []) if code == 200 else []
 
 
-def _print_rows(rows: list[dict]):
+def _print_rows(rows: list[dict[str, Any]]) -> None:
     if not rows:
         print("(no dashboards — is dod running?)")
         return
@@ -71,7 +73,8 @@ def _print_rows(rows: list[dict]):
         print(f"  {r['id']:<{w}}  {r.get('state', ''):<16} {port:<7} {r.get('name', '')}")
 
 
-def _add_payload(name, port, cmd, cwd, blurb="", why="") -> dict:
+def _add_payload(name: str, port: int, cmd: str | None, cwd: str,
+                 blurb: str = "", why: str = "") -> dict[str, Any]:
     p = {"name": name, "port": port, "cwd": cwd, "blurb": blurb, "why": why}
     if cmd:
         p["cmd"] = shlex.split(cmd)

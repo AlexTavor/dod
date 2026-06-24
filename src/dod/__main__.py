@@ -31,7 +31,7 @@ def _init(paths: Paths) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else list(argv)
     paths = Paths.create()
     if argv and argv[0] == "daemon":

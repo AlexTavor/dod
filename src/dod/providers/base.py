@@ -11,10 +11,11 @@ from __future__ import annotations
 from typing import Protocol
 
 from ..config import Paths
+from ..models import Entry
 
 
 class Provider(Protocol):
     name: str
 
-    def discover(self, paths: Paths) -> list[dict]:
+    def discover(self, paths: Paths) -> list[Entry]:
         ...

@@ -25,10 +25,14 @@ import signal
 import subprocess
 import threading
 import time
-from typing import Protocol
+from collections.abc import Callable
+from pathlib import Path
+from typing import Protocol, cast
 
 from . import probe as net
 from .config import LOG_CAP, Paths
+from .models import ActionResult, CrashMark, Entry, Lockfile, State, StopReason
+from .registry import Registry
 from .util import load_json, write_json
 
 
@@ -41,7 +45,8 @@ class ProcHandle(Protocol):
     def poll(self) -> int | None: ...
 
 
-def _default_spawn(cmd, cwd, env, log_path):
+def _default_spawn(cmd: list[str], cwd: str | None, env: dict[str, str] | None,
+                   log_path: Path | None) -> ProcHandle:
     """Real subprocess spawn. Injectable so tests can run without real processes."""
     if log_path is not None:
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,7 +83,9 @@ def pid_alive(pid: int) -> bool:
 
 
 class Supervisor:
-    def __init__(self, paths: Paths, registry, spawn=None, clock=time.time):
+    def __init__(self, paths: Paths, registry: Registry,
+                 spawn: Callable[..., ProcHandle] | None = None,
+                 clock: Callable[[], float] = time.time) -> None:
         self.paths = paths
         self.registry = registry
         self._spawn = spawn or _default_spawn
@@ -88,33 +95,36 @@ class Supervisor:
         self.started_at: dict[str, float] = {}
 
     # ── lockfiles + crash markers ───────────────────────────────────────
-    def _read_lock(self, eid: str) -> dict | None:
+    def _read_lock(self, eid: str) -> Lockfile | None:
         try:
-            return load_json(self.paths.lock(eid)) or None
+            lf = load_json(self.paths.lock(eid))
         except Exception:  # noqa: BLE001
             return None
+        return cast(Lockfile, lf) if lf else None
 
-    def _write_lock(self, eid, pid, pgid, port, cmd):
+    def _write_lock(self, eid: str, pid: int, pgid: int | None, port: int | None,
+                    cmd: list[str]) -> None:
         write_json(self.paths.lock(eid),
                    {"pid": pid, "pgid": pgid, "port": port, "cmd": cmd, "started_at": self.clock()})
 
-    def _write_crash(self, eid: str, exit_code, note: str = ""):
+    def _write_crash(self, eid: str, exit_code: int | None, note: str = "") -> None:
         write_json(self.paths.crash(eid), {"exit": exit_code, "at": self.clock(), "note": note})
 
-    def _read_crash(self, eid: str) -> dict | None:
-        return load_json(self.paths.crash(eid)) or None
+    def _read_crash(self, eid: str) -> CrashMark | None:
+        c = load_json(self.paths.crash(eid))
+        return cast(CrashMark, c) if c else None
 
-    def _clear_crash(self, eid: str):
+    def _clear_crash(self, eid: str) -> None:
         self.paths.crash(eid).unlink(missing_ok=True)
 
-    def _write_stop(self, eid: str):
+    def _write_stop(self, eid: str) -> None:
         write_json(self.paths.stopmark(eid), {"kind": "clean", "at": self.clock()})
 
-    def _clear_marks(self, eid: str):
+    def _clear_marks(self, eid: str) -> None:
         self.paths.crash(eid).unlink(missing_ok=True)
         self.paths.stopmark(eid).unlink(missing_ok=True)
 
-    def _owns(self, lf: dict | None) -> bool:
+    def _owns(self, lf: Lockfile | None) -> bool:
         """True only if the lockfile's pid is alive AND still in its recorded process
         group — the pgid check defeats pid-reuse faking a live child after a restart."""
         if not lf:
@@ -130,7 +140,7 @@ class Supervisor:
         return True
 
     # ── start / stop / restart ──────────────────────────────────────────
-    def start(self, e: dict) -> dict:
+    def start(self, e: Entry) -> ActionResult:
         eid = e["id"]
         cwd = self.registry.resolve_cwd(e)
         self._clear_marks(eid)                 # a fresh start clears any prior crash/stop reason
@@ -171,7 +181,7 @@ class Supervisor:
         return {"ok": True, "state": "starting"}
 
     @staticmethod
-    def _killpg(pgid, hard=False):
+    def _killpg(pgid: int | None, hard: bool = False) -> None:
         if not pgid or pgid <= 1:
             return
         with contextlib.suppress(ProcessLookupError, PermissionError):
@@ -185,7 +195,7 @@ class Supervisor:
             time.sleep(0.1)
         return not net.port_open(int(port))
 
-    def stop(self, e: dict) -> dict:
+    def stop(self, e: Entry) -> ActionResult:
         eid = e["id"]
         lf = self._read_lock(eid)
         if e.get("stop") == "leave" and eid not in self.procs:
@@ -229,11 +239,11 @@ class Supervisor:
         self.paths.lock(eid).unlink(missing_ok=True)
         return {"ok": True}
 
-    def restart(self, e: dict) -> dict:
+    def restart(self, e: Entry) -> ActionResult:
         res = self.stop(e)
         if not res.get("ok") and not str(res.get("error", "")).startswith("not running"):
-            return {"ok": False, "error": f"restart aborted: {res.get('error')}",
-                    "detail": res.get("detail")}
+            return cast(ActionResult, {"ok": False, "error": f"restart aborted: {res.get('error')}",
+                                       "detail": res.get("detail")})
         port = e.get("port")
         if port:
             self._wait_port_closed(int(port), timeout=3.0)
@@ -286,7 +296,7 @@ class Supervisor:
                     lp.unlink(missing_ok=True)
 
     # ── liveness ────────────────────────────────────────────────────────
-    def state(self, e: dict) -> dict:
+    def state(self, e: Entry) -> State:
         """The detailed state, projected to the user-facing model: a top-level
         ``status`` (live|stopped) and a ``last_stop_reason`` (clean | crash+exit | …)."""
         r = self._state_raw(e)
@@ -298,27 +308,31 @@ class Supervisor:
             r["last_stop_reason"] = self._stop_reason(e["id"], st, r.get("exit"))
         return r
 
-    def _stop_reason(self, eid: str, st: str, exit_code):
+    def _stop_reason(self, eid: str, st: str, exit_code: int | None) -> StopReason | None:
         if st == "crashed":
-            return {"kind": "crash", "exit": exit_code}
+            return StopReason(kind="crash", exit=exit_code)
         if st == "port-busy-foreign":
-            return {"kind": "port-busy"}
+            return StopReason(kind="port-busy")
         if st == "archived":
             return None
         # st == "stopped": _state_raw already routed real crashes to "crashed", so a
         # surviving stop marker means a deliberate stop; otherwise it never ran.
-        return {"kind": "clean"} if self.paths.stopmark(eid).exists() else None
+        return StopReason(kind="clean") if self.paths.stopmark(eid).exists() else None
 
-    def _state_raw(self, e: dict) -> dict:
+    def _state_raw(self, e: Entry) -> State:
         eid = e["id"]
-        base = {"id": eid, "name": e.get("name", eid), "blurb": e.get("blurb", ""),
+        base: dict[str, object] = {"id": eid, "name": e.get("name", eid), "blurb": e.get("blurb", ""),
                 "why": e.get("why", ""), "tags": e.get("tags", []), "type": e["type"],
                 "port": e.get("port"), "cmd": e.get("cmd", []),
                 "source": e.get("source", "registry"), "provider": e.get("provider"),
                 "stop": e.get("stop"), "embeddable": True, "controllable": False,
                 "log_tail": "", "render": "iframe"}
+
+        def done(**kw: object) -> State:
+            return cast(State, {**base, **kw})
+
         if e.get("state_override") == "archived":
-            return {**base, "state": "archived"}
+            return done(state="archived")
         lf = self._read_lock(eid)
         owned = eid in self.procs
 
@@ -326,7 +340,7 @@ class Supervisor:
             st = "launched" if lf else "stopped"
             if lf and lf.get("started_at"):
                 base["launched_at"] = lf["started_at"]
-            return {**base, "state": st, "controllable": False}
+            return done(state=st, controllable=False)
 
         port = e.get("port")
         ok, embeddable, _ = (net.probe(int(port), e.get("ready", {})) if port else (False, True, None))
@@ -339,31 +353,33 @@ class Supervisor:
             if not self.paths.crash(eid).exists():
                 self._write_crash(eid, rc)
             base["log_tail"] = net.log_tail(self.paths.log(eid))
-            return {**base, "state": "crashed", "exit": rc}
+            return done(state="crashed", exit=rc)
 
         if ok:
             meta = net.fetch_meta(int(port)) if port else None
             if meta:
                 base["render"] = "spec" if meta.get("render") == "spec" else "iframe"
-                for k in ("name", "blurb", "why"):
-                    if meta.get(k):
-                        base[k] = meta[k]
+                if meta.get("name"):
+                    base["name"] = meta["name"]
+                if meta.get("blurb"):
+                    base["blurb"] = meta["blurb"]
+                if meta.get("why"):
+                    base["why"] = meta["why"]
             if mine:
                 self._clear_crash(eid)                     # healthy again — drop any stale crash
-                return {**base, "state": "ready"}
-            return {**base, "state": "external", "controllable": False}
+                return done(state="ready")
+            return done(state="external", controllable=False)
 
         # not answering
         crash = self._read_crash(eid)
         if crash and not mine:           # a recorded death that survived a dod restart
             base["log_tail"] = net.log_tail(self.paths.log(eid))
-            return {**base, "state": "crashed", "exit": crash.get("exit"),
-                    "crash_note": crash.get("note", "")}
+            return done(state="crashed", exit=crash.get("exit"), crash_note=crash.get("note", ""))
         if mine:
             started = self.started_at.get(eid) or (lf or {}).get("started_at") or 0
             within = (self.clock() - started) < e.get("ready_timeout_s", 20)
             base["log_tail"] = net.log_tail(self.paths.log(eid))
-            return {**base, "state": "starting" if within else "unhealthy"}
+            return done(state="starting" if within else "unhealthy")
         if port and net.port_open(int(port)):
-            return {**base, "state": "port-busy-foreign", "controllable": False}
-        return {**base, "state": "stopped", "log_tail": net.log_tail(self.paths.log(eid))}
+            return done(state="port-busy-foreign", controllable=False)
+        return done(state="stopped", log_tail=net.log_tail(self.paths.log(eid)))

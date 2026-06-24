@@ -19,9 +19,12 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from ..config import Paths
+from ..models import Entry
 from ..ports import PortAllocator
 from ..util import load_json
 
@@ -46,7 +49,7 @@ def find_pdd_repos(roots: list[Path], max_depth: int = 4) -> list[Path]:
     def is_pdd_working_dir(p: Path) -> bool:
         return (p / "config.yaml").exists() or (p / "constitution.md").exists()
 
-    def walk(d: Path, depth: int):
+    def walk(d: Path, depth: int) -> None:
         if depth > max_depth:
             return
         try:
@@ -71,11 +74,13 @@ def find_pdd_repos(roots: list[Path], max_depth: int = 4) -> list[Path]:
 class PddProvider:
     name = "pdd"
 
-    def __init__(self, config: dict | None = None, repo_finder=find_pdd_repos, ttl: float = 60.0):
+    def __init__(self, config: dict[str, Any] | None = None,
+                 repo_finder: Callable[[list[Path], int], list[Path]] = find_pdd_repos,
+                 ttl: float = 60.0) -> None:
         self.config = config or {}
         self._find = repo_finder
         self.ttl = ttl                 # discover() runs every sampler tick — cache the fs scan
-        self._cache: list[dict] | None = None
+        self._cache: list[Entry] | None = None
         self._cache_at = 0.0
 
     @classmethod
@@ -83,7 +88,7 @@ class PddProvider:
         cfg = load_json(paths.home / "providers" / "pdd.json")
         return cls(cfg)
 
-    def discover(self, paths: Paths) -> list[dict]:
+    def discover(self, paths: Paths) -> list[Entry]:
         now = time.monotonic()
         if self._cache is not None and (now - self._cache_at) < self.ttl:
             return self._cache
@@ -91,7 +96,7 @@ class PddProvider:
         self._cache_at = now
         return self._cache
 
-    def _scan(self, paths: Paths) -> list[dict]:
+    def _scan(self, paths: Paths) -> list[Entry]:
         cfg = self.config
         if cfg.get("enabled") is False:
             return []
@@ -111,7 +116,7 @@ class PddProvider:
                 s = _slug(f"{r.parent.name}-{r.name}")
             slugs[s] = r
 
-        entries: list[dict] = []
+        entries: list[Entry] = []
         for slug, repo in sorted(slugs.items()):
             for kind in kinds:
                 sub, label = KINDS[kind]
