@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
 
 from .config import WEB_DIR
 
@@ -37,7 +39,9 @@ SHIM = """<!doctype html><html><head><meta charset="utf-8"><title>__TITLE__</tit
 <script>dashkit.mount({renderUrl:'/api/render', mount:'#dk', actionUrl:'/api/action'});</script></body></html>"""  # noqa: E501
 
 
-def make_handler(meta: dict, render, on_action=None):
+def make_handler(meta: dict[str, Any], render: Callable[[], dict[str, Any]],
+                 on_action: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None
+                 ) -> type[BaseHTTPRequestHandler]:
     # render:"spec" is the engine's discriminator (supervisor.state) for native render vs
     # iframe; contract is the discovery gate (probe.fetch_meta). Both must be set or a kit
     # dashboard renders as a raw-JSON iframe and is invisible to discovery.
@@ -48,10 +52,11 @@ def make_handler(meta: dict, render, on_action=None):
     shim = SHIM.replace("__TITLE__", str(meta.get("name", "dashboard")))
 
     class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *a):
+        def log_message(self, *a: object) -> None:
             pass
 
-        def _send(self, code, obj, ctype="application/json", no_cache=False):
+        def _send(self, code: int, obj: str | bytes | dict[str, Any],
+                  ctype: str = "application/json", no_cache: bool = False) -> None:
             data = obj if isinstance(obj, bytes) else json.dumps(obj).encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
@@ -62,7 +67,7 @@ def make_handler(meta: dict, render, on_action=None):
             with contextlib.suppress(BrokenPipeError):
                 self.wfile.write(data)
 
-        def do_GET(self):
+        def do_GET(self) -> None:
             p = self.path.split("?", 1)[0]
             if p == "/":
                 return self._send(200, shim, "text/html; charset=utf-8")
@@ -85,7 +90,7 @@ def make_handler(meta: dict, render, on_action=None):
                 return self._send(204, b"")
             return self._send(404, {"error": "not found"})
 
-        def do_POST(self):
+        def do_POST(self) -> None:
             if self.path.split("?", 1)[0] != "/api/action":
                 return self._send(404, {"error": "not found"})
             if on_action is None:
@@ -104,7 +109,9 @@ def make_handler(meta: dict, render, on_action=None):
     return Handler
 
 
-def serve(meta: dict, render, port: int, on_action=None, host: str = HOST) -> int:
+def serve(meta: dict[str, Any], render: Callable[[], dict[str, Any]], port: int,
+          on_action: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None,
+          host: str = HOST) -> int:
     """Block, serving the contract. (For tests, use make_handler with your own server.)"""
     print(f"{meta.get('name', 'dashboard')} → http://{host}:{port}  (dod-kit/1"
           f"{', interactive' if on_action else ''})")

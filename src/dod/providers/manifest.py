@@ -22,8 +22,9 @@ Config at ``$DOD_HOME/providers/manifest.json``: {enabled, roots, max_depth}.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from ..config import Paths
 from ..models import Entry
@@ -39,7 +40,7 @@ def find_manifests(roots: list[Path], max_depth: int = 4) -> list[Path]:
     out: list[Path] = []
     seen: set[Path] = set()
 
-    def walk(d: Path, depth: int):
+    def walk(d: Path, depth: int) -> None:
         if depth > max_depth:
             return
         try:
@@ -95,7 +96,9 @@ def manifest_to_entry(mpath: Path) -> Entry | None:
 class ManifestProvider:
     name = "manifest"
 
-    def __init__(self, config: dict | None = None, finder=find_manifests, ttl: float = 60.0):
+    def __init__(self, config: dict[str, Any] | None = None,
+                 finder: Callable[[list[Path], int], list[Path]] = find_manifests,
+                 ttl: float = 60.0) -> None:
         self.config = config or {}
         self._find = finder
         self.ttl = ttl

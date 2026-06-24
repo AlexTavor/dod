@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from ..config import Paths
 from ..models import Entry
@@ -47,7 +49,7 @@ def find_pdd_repos(roots: list[Path], max_depth: int = 4) -> list[Path]:
     def is_pdd_working_dir(p: Path) -> bool:
         return (p / "config.yaml").exists() or (p / "constitution.md").exists()
 
-    def walk(d: Path, depth: int):
+    def walk(d: Path, depth: int) -> None:
         if depth > max_depth:
             return
         try:
@@ -72,7 +74,9 @@ def find_pdd_repos(roots: list[Path], max_depth: int = 4) -> list[Path]:
 class PddProvider:
     name = "pdd"
 
-    def __init__(self, config: dict | None = None, repo_finder=find_pdd_repos, ttl: float = 60.0):
+    def __init__(self, config: dict[str, Any] | None = None,
+                 repo_finder: Callable[[list[Path], int], list[Path]] = find_pdd_repos,
+                 ttl: float = 60.0) -> None:
         self.config = config or {}
         self._find = repo_finder
         self.ttl = ttl                 # discover() runs every sampler tick — cache the fs scan

@@ -19,18 +19,23 @@ import json
 import re
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .config import CONTRACTS, ID_RE, WEB_DIR
+from .models import Entry, Meta
 from .probe import log_tail, proxy_get, proxy_post
 
+if TYPE_CHECKING:
+    from .app import App
 
-def make_handler(app):
+
+def make_handler(app: App) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *a):
+        def log_message(self, *a: object) -> None:
             pass
 
-        def _send(self, code, body, ctype="application/json", no_cache=False):
+        def _send(self, code: int, body: str | bytes, ctype: str = "application/json",
+                  no_cache: bool = False) -> None:
             data = body.encode() if isinstance(body, str) else body
             self.send_response(code)
             self.send_header("Content-Type", ctype)
@@ -41,7 +46,7 @@ def make_handler(app):
             with contextlib.suppress(BrokenPipeError):
                 self.wfile.write(data)
 
-        def _static(self, name, ctype):
+        def _static(self, name: str, ctype: str) -> None:
             try:
                 body = (WEB_DIR / name).read_text(encoding="utf-8")
             except FileNotFoundError:
@@ -62,17 +67,17 @@ def make_handler(app):
                 return False
             return True
 
-        def _body(self) -> dict:
+        def _body(self) -> dict[str, Any]:
             n = int(self.headers.get("Content-Length") or 0)
             try:
-                return json.loads(self.rfile.read(n) or b"{}")
+                return cast(dict[str, Any], json.loads(self.rfile.read(n) or b"{}"))
             except Exception:  # noqa: BLE001
                 return {}
 
         def _qs_id(self) -> str:
             return urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("id", [""])[0]
 
-        def do_GET(self):
+        def do_GET(self) -> None:
             p = self.path.split("?", 1)[0]
             if p == "/":
                 return self._static("index.html", "text/html; charset=utf-8")
@@ -91,7 +96,8 @@ def make_handler(app):
                 eid = self._qs_id()
                 if not ID_RE.match(eid):
                     return self._send(400, json.dumps({"error": "bad id"}))
-                port = (app.registry.get(eid) or {}).get("port")
+                ent = app.registry.get(eid)
+                port = ent.get("port") if ent else None
                 if not port:
                     return self._send(404, json.dumps({"error": "unknown id or no port"}))
                 sub = "/api/render" if self.path.startswith("/api/render") else "/api/meta"
@@ -104,7 +110,7 @@ def make_handler(app):
                 return self._send(200, json.dumps({"log": log_tail(app.paths.log(eid))}))
             return self._send(404, json.dumps({"error": "not found"}))
 
-        def do_POST(self):
+        def do_POST(self) -> None:
             action = self.path.rsplit("/", 1)[-1]
             if action == "announce":
                 return self._announce()
@@ -115,7 +121,8 @@ def make_handler(app):
             if action == "action":          # interact-down: route a UI action to the project logic
                 if not ID_RE.match(eid):
                     return self._send(400, json.dumps({"error": "bad id"}))
-                port = (app.registry.get(eid) or {}).get("port")
+                ent = app.registry.get(eid)
+                port = ent.get("port") if ent else None
                 if not port:
                     return self._send(404, json.dumps({"error": "unknown id or no port"}))
                 payload = json.dumps({"action": body.get("action"),
@@ -162,9 +169,9 @@ def make_handler(app):
                 res = {"ok": False, "error": f"unknown action {action}"}
             return self._send(200 if res.get("ok") else 409, json.dumps(res))
 
-        def _add(self, body):
+        def _add(self, body: dict[str, Any]) -> None:
             try:
-                port = int(body.get("port"))
+                port = int(body.get("port") or 0)
                 assert 1 <= port <= 65535
             except Exception:  # noqa: BLE001
                 return self._send(400, json.dumps({"error": "bad port"}))
@@ -182,19 +189,19 @@ def make_handler(app):
                      "ready": {"kind": "http", "path": "/", "status": 200},
                      "stop": "sigterm" if launchable else "leave",
                      "singleton": True, "source": "local"}
-            app.registry.add_local(entry)
+            app.registry.add_local(cast(Entry, entry))
             return self._send(200, json.dumps({"ok": True, "id": eid}))
 
-        def _announce(self):
+        def _announce(self) -> None:
             body = self._body()
             try:
-                port = int(body.get("port"))
+                port = int(body.get("port") or 0)
                 assert 1 <= port <= 65535
             except Exception:  # noqa: BLE001
                 return self._send(400, json.dumps({"error": "bad port"}))
             if body.get("contract") not in CONTRACTS:
                 return self._send(400, json.dumps({"error": "not a dod-kit announce"}))
-            app.discovery.record(body, port)
+            app.discovery.record(cast(Meta, body), port)
             return self._send(200, json.dumps({"ok": True}))
 
     return Handler

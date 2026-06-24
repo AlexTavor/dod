@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-def load_json(path: Path) -> dict:
+def load_json(path: Path) -> dict[str, Any]:
     """Read a JSON object; return {} for missing or malformed files (never raise)."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))

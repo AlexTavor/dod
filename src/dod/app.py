@@ -86,7 +86,7 @@ class App:
         self.discovery.load()
         self.write_runtime_files(port)
         threading.Thread(target=run_sampler, args=(self, self._stop), daemon=True).start()
-        def _on_sigterm(*_a):
+        def _on_sigterm(*_a: object) -> None:
             self.shutdown()
             os._exit(0)
         signal.signal(signal.SIGTERM, _on_sigterm)

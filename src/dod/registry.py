@@ -11,11 +11,14 @@ never corrupt your hand-curated catalog, only the transient ``local.json``.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .config import ID_RE, Paths
 from .models import ActionResult, Entry
 from .util import load_json, write_json
+
+if TYPE_CHECKING:
+    from .providers.base import Provider
 
 VALID_KEYS = ("id", "name", "blurb", "why", "tags", "type", "cmd", "cwd", "env",
               "port", "ready", "ready_timeout_s", "stop", "singleton", "source",
@@ -54,7 +57,8 @@ def validate(e: dict[str, Any], source: str) -> Entry | None:
 
 
 class Registry:
-    def __init__(self, paths: Paths, providers=None, project_base: Path | None = None):
+    def __init__(self, paths: Paths, providers: list[Provider] | None = None,
+                 project_base: Path | None = None) -> None:
         self.paths = paths
         self.providers = list(providers or [])
         # relative cwds resolve against this base; entries should normally be absolute.
