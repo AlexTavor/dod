@@ -9,6 +9,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "noEmit": true
