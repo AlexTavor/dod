@@ -65,6 +65,11 @@ describe('stateless atoms', () => {
     expect(el.querySelector('b.x')?.textContent).toBe('hi');
   });
 
+  it('stat renders a sparkline when given spark data', () => {
+    const el = render1({ type: 'stat', label: 'trend', value: 5, spark: [1, 3, 2, 5] });
+    expect(el.querySelector('.dk-stat svg path')).not.toBeNull();
+  });
+
   it('an atom that throws yields an error panel rather than crashing the render', () => {
     const bomb = {
       type: 'stat',

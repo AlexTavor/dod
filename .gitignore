@@ -15,3 +15,7 @@ node_modules/
 
 # Local Claude Code settings (machine-specific permission grants)
 .claude/settings.local.json
+.claude/launch.json
+
+# Generated: self-contained build of the demo for local preview
+frontend/demo/standalone.html

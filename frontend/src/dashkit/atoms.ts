@@ -17,8 +17,8 @@ import type {
   StatPanel,
   TablePanel,
 } from '../types';
-import { chart } from './charts';
-import { fmt } from './format';
+import { chart, spark } from './charts';
+import { color, fmt } from './format';
 
 const section = (p: SectionPanel): TemplateResult =>
   html`<div class="dk-panel dk-full dk-sec">${p.title ?? ''}</div>`;
@@ -27,6 +27,7 @@ const stat = (p: StatPanel): TemplateResult => html`
   <div class="dk-panel dk-stat">
     <div class="dk-l">${p.label ?? ''}</div>
     <div class="dk-n">${fmt(p.value)}${p.sub != null ? html` <small>${p.sub}</small>` : ''}</div>
+    ${p.spark && p.spark.length ? spark(p.spark, color(p.color ?? 0)) : ''}
   </div>`;
 
 const progress = (p: ProgressPanel): TemplateResult => {
