@@ -79,4 +79,21 @@ describe('dod-detail', () => {
     expect(onAction).toHaveBeenCalledWith({ verb: 'start', id: 'a' });
     el.remove();
   });
+
+  it('routes a dashkit action to a spec-action event', async () => {
+    let captured: ((a: string, p: unknown) => void) | undefined;
+    const mountSpec = vi.fn((opts: { onAction: (a: string, p: unknown) => void }) => {
+      captured = opts.onAction;
+      return { stop: vi.fn() };
+    });
+    const el = await makeDetail(
+      { id: 'cnt', status: 'live', state: 'ready', render: 'spec' },
+      mountSpec as unknown as DodDetail['mountSpec'],
+    );
+    const onSpec = vi.fn();
+    el.addEventListener('spec-action', (e) => onSpec((e as CustomEvent).detail));
+    captured?.('increment', { n: 2 });
+    expect(onSpec).toHaveBeenCalledWith({ id: 'cnt', action: 'increment', payload: { n: 2 } });
+    el.remove();
+  });
 });

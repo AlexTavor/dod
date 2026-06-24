@@ -61,6 +61,13 @@ export class DodApp extends LitElement {
     await this.refresh();
   }
 
+  /** interact-down: route a dashkit button from a spec dashboard through dod's proxy. */
+  private async specAction(d: { id: string; action: string; payload: unknown }): Promise<void> {
+    const res = await this.api.post('action', { id: d.id, action: d.action, payload: d.payload });
+    if (res.error === 'forbidden') this.reload();
+    // no refresh: dashkit's own poll re-renders the spec
+  }
+
   private async doReorder(from: string, to: string): Promise<void> {
     const order = reorder(
       this.entries.map((e) => e.id),
@@ -93,6 +100,8 @@ export class DodApp extends LitElement {
       <dod-detail
         .entry=${sel}
         @action=${(ev: CustomEvent<{ verb: string; id: string }>) => void this.act(ev.detail.verb, ev.detail.id)}
+        @spec-action=${(ev: CustomEvent<{ id: string; action: string; payload: unknown }>) =>
+          void this.specAction(ev.detail)}
       ></dod-detail>
     `;
   }

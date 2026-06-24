@@ -79,4 +79,22 @@ describe('dod-app', () => {
     expect(app.reload).toHaveBeenCalled();
     app.remove();
   });
+
+  it('routes a spec-action to POST /api/action', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ entries: [{ id: 'c', status: 'live', state: 'ready', render: 'spec' }], discovered: [] }),
+      )
+      .mockResolvedValue(jsonResponse({ ok: true }));
+    const app = makeApp(new DodApi('t', fetchMock as unknown as FetchLike));
+    await app.refresh();
+    await app.updateComplete;
+    app
+      .querySelector('dod-detail')
+      ?.dispatchEvent(new CustomEvent('spec-action', { detail: { id: 'c', action: 'go', payload: { n: 1 } }, bubbles: true }));
+    await flush();
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/api/action'))).toBe(true);
+    app.remove();
+  });
 });

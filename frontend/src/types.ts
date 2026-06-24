@@ -107,6 +107,32 @@ export interface ChartPanel {
   right?: string;
 }
 
+/** Routes an interact-down action to its handler (dod's proxy, or a standalone POST). */
+export type ActionHandler = (action: string, payload: unknown) => void;
+
+export interface ActionButton {
+  label?: string;
+  action?: string;
+  payload?: Record<string, unknown>;
+  /** Button colour: ok | accent | warn | err. */
+  tone?: string;
+}
+
+export interface ActionsPanel {
+  type: 'actions';
+  title?: string;
+  buttons?: ActionButton[];
+}
+
+export interface ButtonPanel {
+  type: 'button';
+  title?: string;
+  label?: string;
+  action?: string;
+  payload?: Record<string, unknown>;
+  tone?: string;
+}
+
 /** Any atom dashkit does not (yet) know: rendered as a labelled fallback, never thrown. */
 export interface UnknownPanel {
   type: string;
@@ -124,4 +150,6 @@ export type Panel =
   | ProsePanel
   | HtmlPanel
   | ChartPanel
+  | ActionsPanel
+  | ButtonPanel
   | UnknownPanel;
