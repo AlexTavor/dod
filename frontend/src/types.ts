@@ -21,6 +21,9 @@ export interface StatPanel {
   label?: string;
   value?: number | string | null;
   sub?: string;
+  /** Optional inline sparkline under the value. */
+  spark?: Array<number | null>;
+  color?: number;
 }
 
 export interface ProgressPanel {
