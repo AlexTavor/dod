@@ -66,6 +66,36 @@
           text: 'This dashboard is fed with mock data.\n\nEvery atom and chart kind on this page is rendered by the ported Lit dashkit. The buttons below run the interact-down path client-side.',
         },
 
+        { type: 'section', title: 'Forms & lenses (W4b)' },
+        {
+          type: 'form', title: 'Edit target', action: 'save', submitLabel: 'Save', cancelAction: 'cancel',
+          context: { id: 'svc-1' },
+          fields: [
+            { key: 'name', label: 'Name', value: 'web' },
+            { key: 'replicas', label: 'Replicas', kind: 'number', value: 3 },
+            { key: 'tier', label: 'Tier', kind: 'select', value: 'prod', options: [{ value: 'dev' }, { value: 'staging' }, { value: 'prod' }] },
+            { key: 'autoscale', label: 'Autoscale', kind: 'checkbox', value: true },
+            { key: 'notes', label: 'Notes', kind: 'textarea', value: 'mock note' },
+          ],
+        },
+        {
+          type: 'wordcloud', title: 'Topics (toggle lens + cloud/bars)',
+          facets: [
+            {
+              key: 'errors', label: 'Errors', terms: [
+                { text: 'timeout', weight: 18 }, { text: 'ECONNRESET', weight: 11 }, { text: '500', weight: 9 },
+                { text: 'oom', weight: 7 }, { text: 'panic', weight: 5 }, { text: 'EADDRINUSE', weight: 4 }, { text: 'dns', weight: 3 },
+              ],
+            },
+            {
+              key: 'paths', label: 'Paths', terms: [
+                { text: '/api/state', weight: 22 }, { text: '/api/render', weight: 16 }, { text: '/api/action', weight: 9 },
+                { text: '/healthz', weight: 6 }, { text: '/app.js', weight: 4 },
+              ],
+            },
+          ],
+        },
+
         { type: 'section', title: 'Actions (interact-down)' },
         {
           type: 'actions', title: 'Try it',
@@ -83,6 +113,8 @@
     if (action === 'inc') state.count += 1;
     else if (action === 'add') state.count += (payload && payload.n) || 0;
     else if (action === 'reset') state.count = 0;
+    else if (action === 'save') { state.history.push('save ' + JSON.stringify((payload && payload.values) || {})); render(); return; }
+    else if (action === 'cancel') { state.history.push('cancel'); render(); return; }
     state.history.push(action + (payload && payload.n ? ' ' + payload.n : '') + ' -> count=' + state.count);
     render();
   }

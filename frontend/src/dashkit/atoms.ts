@@ -7,6 +7,7 @@ import type {
   BadgePanel,
   ButtonPanel,
   ChartPanel,
+  FormPanel,
   HtmlPanel,
   KvPanel,
   LogPanel,
@@ -16,9 +17,12 @@ import type {
   SectionPanel,
   StatPanel,
   TablePanel,
+  WordcloudPanel,
 } from '../types';
 import { chart, spark } from './charts';
 import { color, fmt } from './format';
+import './dk-form';
+import './dk-wordcloud';
 
 const section = (p: SectionPanel): TemplateResult =>
   html`<div class="dk-panel dk-full dk-sec">${p.title ?? ''}</div>`;
@@ -172,6 +176,10 @@ export function panel(p: Panel, onAction?: ActionHandler): TemplateResult {
           onAction,
         );
       }
+      case 'form':
+        return html`<dk-form .panel=${p as FormPanel} .onAction=${onAction}></dk-form>`;
+      case 'wordcloud':
+        return html`<dk-wordcloud .panel=${p as WordcloudPanel}></dk-wordcloud>`;
       default:
         return html`<div class="dk-panel dk-full">
           <span class="dk-muted">unknown atom: ${p.type}</span>

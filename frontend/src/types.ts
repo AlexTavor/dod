@@ -136,6 +136,47 @@ export interface ButtonPanel {
   tone?: string;
 }
 
+export interface FormField {
+  key: string;
+  label?: string;
+  kind?: 'text' | 'number' | 'textarea' | 'select' | 'checkbox';
+  value?: string | number | boolean | null;
+  options?: Array<{ value: string | number; label?: string }>;
+}
+
+export interface FormPanel {
+  type: 'form';
+  id?: string;
+  title?: string;
+  action?: string;
+  submitLabel?: string;
+  cancelAction?: string;
+  fields?: FormField[];
+  /** Extra context merged into the submitted payload alongside `values`. */
+  context?: Record<string, unknown>;
+}
+
+export interface WordcloudTerm {
+  text: string;
+  weight?: number;
+  tone?: string;
+  group?: number;
+}
+
+export interface WordcloudFacet {
+  key: string;
+  label?: string;
+  terms?: WordcloudTerm[];
+  legend?: Array<{ label: string; tone?: string }>;
+}
+
+export interface WordcloudPanel {
+  type: 'wordcloud';
+  id?: string;
+  title?: string;
+  facets?: WordcloudFacet[];
+}
+
 /** Any atom dashkit does not (yet) know: rendered as a labelled fallback, never thrown. */
 export interface UnknownPanel {
   type: string;
@@ -155,4 +196,6 @@ export type Panel =
   | ChartPanel
   | ActionsPanel
   | ButtonPanel
+  | FormPanel
+  | WordcloudPanel
   | UnknownPanel;
