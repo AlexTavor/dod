@@ -12,8 +12,10 @@ import socket
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import cast
 
 from .config import CONTRACTS, HOST
+from .models import Meta, ReadySpec
 
 
 def port_open(port: int) -> bool:
@@ -27,7 +29,7 @@ def port_open(port: int) -> bool:
         s.close()
 
 
-def probe(port: int, ready: dict) -> tuple[bool, bool, int | None]:
+def probe(port: int, ready: ReadySpec) -> tuple[bool, bool, int | None]:
     """(ok, embeddable, status). embeddable=False if it sends frame-blocking headers."""
     path = ready.get("path", "/") if ready.get("kind") == "http" else "/"
     try:
@@ -44,7 +46,7 @@ def probe(port: int, ready: dict) -> tuple[bool, bool, int | None]:
         return False, True, None
 
 
-def fetch_meta(port: int) -> dict | None:
+def fetch_meta(port: int) -> Meta | None:
     """GET /api/meta, returned ONLY for a dashkit contract response — the marker is the
     discriminator that lets a foreign dashboard keep its own /api/meta without dod
     mistaking it for native-spec."""
@@ -52,7 +54,7 @@ def fetch_meta(port: int) -> dict | None:
         req = urllib.request.Request(f"http://{HOST}:{int(port)}/api/meta", method="GET")
         with urllib.request.urlopen(req, timeout=0.4) as r:
             m = json.loads(r.read(200_000) or b"{}")
-        return m if isinstance(m, dict) and m.get("contract") in CONTRACTS else None
+        return cast(Meta, m) if isinstance(m, dict) and m.get("contract") in CONTRACTS else None
     except Exception:  # noqa: BLE001
         return None
 

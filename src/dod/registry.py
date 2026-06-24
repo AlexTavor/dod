@@ -11,8 +11,10 @@ never corrupt your hand-curated catalog, only the transient ``local.json``.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 from .config import ID_RE, Paths
+from .models import ActionResult, Entry
 from .util import load_json, write_json
 
 VALID_KEYS = ("id", "name", "blurb", "why", "tags", "type", "cmd", "cwd", "env",
@@ -20,7 +22,7 @@ VALID_KEYS = ("id", "name", "blurb", "why", "tags", "type", "cmd", "cwd", "env",
               "provider", "_comment")
 
 
-def validate(e: dict, source: str) -> dict | None:
+def validate(e: dict[str, Any], source: str) -> Entry | None:
     """Coerce + default one raw entry; return None (with a printed reason) if unusable."""
     if not isinstance(e, dict) or not ID_RE.match(str(e.get("id", ""))):
         print(f"dod: skip entry with bad/missing id in {source}: {e.get('id')!r}")
@@ -48,7 +50,7 @@ def validate(e: dict, source: str) -> dict | None:
     e.setdefault("ready", {"kind": "port"})
     e.setdefault("ready_timeout_s", 20)
     e["source"] = e.get("source", source)
-    return e
+    return cast(Entry, e)
 
 
 class Registry:
@@ -58,9 +60,9 @@ class Registry:
         # relative cwds resolve against this base; entries should normally be absolute.
         self.project_base = project_base or Path.home()
 
-    def load(self) -> dict[str, dict]:
+    def load(self) -> dict[str, Entry]:
         """Merged, validated entries with the archive overlay applied + duplicate-port lint."""
-        entries: dict[str, dict] = {}
+        entries: dict[str, Entry] = {}
         for prov in self.providers:
             try:
                 for raw in prov.discover(self.paths):
@@ -83,7 +85,7 @@ class Registry:
         return entries
 
     @staticmethod
-    def _lint_ports(entries: dict[str, dict]) -> None:
+    def _lint_ports(entries: dict[str, Entry]) -> None:
         seen: dict[int, str] = {}
         for e in entries.values():
             p = e.get("port")
@@ -92,22 +94,22 @@ class Registry:
                     print(f"dod: LINT duplicate port {p}: {seen[p]} and {e['id']}")
                 seen[p] = e["id"]
 
-    def resolve_cwd(self, e: dict) -> str:
+    def resolve_cwd(self, e: Entry) -> str:
         cwd = e.get("cwd", ".")
         p = Path(cwd)
         return str(p if p.is_absolute() else (self.project_base / cwd))
 
-    def get(self, eid: str) -> dict | None:
+    def get(self, eid: str) -> Entry | None:
         return self.load().get(eid)
 
     # ── mutating the local (writable) tier ──────────────────────────────
-    def add_local(self, entry: dict) -> None:
+    def add_local(self, entry: Entry) -> None:
         data = load_json(self.paths.local) or {"entries": []}
         data["entries"] = [x for x in data.get("entries", []) if x.get("id") != entry["id"]]
         data["entries"].append(entry)
         write_json(self.paths.local, data)
 
-    def forget(self, eid: str) -> dict:
+    def forget(self, eid: str) -> ActionResult:
         """Permanently drop a *local* entry (the cure for an append-only graveyard).
 
         Durable and provider entries cannot be forgotten — archive those instead;

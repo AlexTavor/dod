@@ -8,9 +8,13 @@ from __future__ import annotations
 import re
 import threading
 import time
+from collections.abc import Callable
+from typing import cast
 
 from . import probe as net
 from .config import Paths
+from .models import ActionResult, Discovered, Entry, Meta
+from .registry import Registry
 from .util import load_json, write_json
 
 
@@ -19,12 +23,12 @@ def disc_id(port: int) -> str:
 
 
 class Discovery:
-    def __init__(self, paths: Paths, registry, clock=time.time):
+    def __init__(self, paths: Paths, registry: Registry, clock: Callable[[], float] = time.time) -> None:
         self.paths = paths
         self.registry = registry
         self.clock = clock
         self.lock = threading.Lock()
-        self.found: dict[str, dict] = {}      # synthetic-id → contract-speaker not yet pinned
+        self.found: dict[str, Discovered] = {}  # synthetic-id → contract-speaker not yet pinned
         self.ignored: set[int] = set()        # ports the user said "don't show me this"
 
     def load(self) -> None:
@@ -41,7 +45,7 @@ class Discovery:
         write_json(self.paths.discovered,
                    {"entries": list(self.found.values()), "ignored": sorted(self.ignored)})
 
-    def record(self, meta: dict, port: int) -> None:
+    def record(self, meta: Meta, port: int) -> None:
         """Note a contract-speaker — unless its port is already registered or ignored."""
         port = int(port)
         if port in self.ignored:
@@ -50,45 +54,45 @@ class Discovery:
             return
         did = disc_id(port)
         with self.lock:
-            self.found[did] = {
+            self.found[did] = cast(Discovered, {
                 "id": did, "port": port, "render": meta.get("render", "iframe"),
                 "name": str(meta.get("name", f"port {port}"))[:120],
                 "blurb": str(meta.get("blurb", ""))[:200],
                 "why": str(meta.get("why", ""))[:500],
                 "announced_at": self.clock(),
-            }
+            })
             self._save()
 
-    def pin(self, did: str) -> dict:
+    def pin(self, did: str) -> ActionResult:
         """Promote a discovered candidate to a real (adopt-only) local entry."""
         with self.lock:
             d = self.found.get(did)
         if not d:
             return {"ok": False, "error": "unknown discovered id"}
         eid = re.sub(r"[^a-z0-9_-]", "-", str(d["name"]).lower()).strip("-")[:40] or f"port-{d['port']}"
-        self.registry.add_local({
+        self.registry.add_local(cast(Entry, {
             "id": eid, "name": d["name"], "blurb": d.get("blurb", ""),
             "why": d.get("why") or "Discovered contract-speaker, pinned at runtime.",
             "tags": ["discovered"], "type": "web-external", "cmd": [], "cwd": ".",
             "port": d["port"], "ready": {"kind": "http", "path": "/api/meta", "status": 200},
-            "stop": "leave", "singleton": True, "source": "local"})
+            "stop": "leave", "singleton": True, "source": "local"}))
         with self.lock:
             self.found.pop(did, None)
             self._save()
         return {"ok": True, "id": eid}
 
-    def ignore(self, did: str) -> dict:
+    def ignore(self, did: str) -> ActionResult:
         with self.lock:
             d = self.found.pop(did, None)
             if d:
                 self.ignored.add(int(d["port"]))
             self._save()
-        return {"ok": bool(d), **({} if d else {"error": "unknown discovered id"})}
+        return cast(ActionResult, {"ok": bool(d), **({} if d else {"error": "unknown discovered id"})})
 
-    def probe_now(self, rng: str | None) -> dict:
+    def probe_now(self, rng: str | None) -> dict[str, object]:
         """Contract-probe: registry ports by default (tight); opt-in band via `range`
         (bounded ≤200 ports). Adopts only ports answering the dashkit contract."""
-        ports = {int(e["port"]) for e in self.registry.load().values() if e.get("port")}
+        ports = {int(p) for e in self.registry.load().values() if (p := e.get("port"))}
         if rng:
             m = re.match(r"^\s*(\d+)\s*-\s*(\d+)\s*$", str(rng))
             if m:
@@ -116,6 +120,6 @@ class Discovery:
                     self.found.pop(did, None)
                 self._save()
 
-    def snapshot(self) -> list[dict]:
+    def snapshot(self) -> list[Discovered]:
         with self.lock:
             return list(self.found.values())

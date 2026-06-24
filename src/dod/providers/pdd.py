@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 from ..config import Paths
+from ..models import Entry
 from ..ports import PortAllocator
 from ..util import load_json
 
@@ -75,7 +76,7 @@ class PddProvider:
         self.config = config or {}
         self._find = repo_finder
         self.ttl = ttl                 # discover() runs every sampler tick — cache the fs scan
-        self._cache: list[dict] | None = None
+        self._cache: list[Entry] | None = None
         self._cache_at = 0.0
 
     @classmethod
@@ -83,7 +84,7 @@ class PddProvider:
         cfg = load_json(paths.home / "providers" / "pdd.json")
         return cls(cfg)
 
-    def discover(self, paths: Paths) -> list[dict]:
+    def discover(self, paths: Paths) -> list[Entry]:
         now = time.monotonic()
         if self._cache is not None and (now - self._cache_at) < self.ttl:
             return self._cache
@@ -91,7 +92,7 @@ class PddProvider:
         self._cache_at = now
         return self._cache
 
-    def _scan(self, paths: Paths) -> list[dict]:
+    def _scan(self, paths: Paths) -> list[Entry]:
         cfg = self.config
         if cfg.get("enabled") is False:
             return []
@@ -111,7 +112,7 @@ class PddProvider:
                 s = _slug(f"{r.parent.name}-{r.name}")
             slugs[s] = r
 
-        entries: list[dict] = []
+        entries: list[Entry] = []
         for slug, repo in sorted(slugs.items()):
             for kind in kinds:
                 sub, label = KINDS[kind]

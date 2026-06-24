@@ -9,10 +9,13 @@ import secrets
 import signal
 import threading
 import time
+from collections.abc import Callable
 from http.server import ThreadingHTTPServer
 
 from .config import HOST, Paths
 from .discovery import Discovery
+from .models import State
+from .providers.base import Provider
 from .providers.manifest import ManifestProvider
 from .providers.pdd import PddProvider
 from .registry import Registry
@@ -21,12 +24,13 @@ from .supervisor import Supervisor
 from .util import load_json, write_json
 
 
-def default_providers(paths: Paths) -> list:
+def default_providers(paths: Paths) -> list[Provider]:
     return [ManifestProvider.from_paths(paths), PddProvider.from_paths(paths)]
 
 
 class App:
-    def __init__(self, paths: Paths, providers=None, token: str | None = None, clock=time.time):
+    def __init__(self, paths: Paths, providers: list[Provider] | None = None,
+                 token: str | None = None, clock: Callable[[], float] = time.time) -> None:
         self.paths = paths.ensure()
         # Persistent token: reuse the on-disk one across restarts so an open browser tab
         # stays valid through a daemon reload (per-boot rotation 403'd live tabs silently).
@@ -37,7 +41,7 @@ class App:
         self.supervisor = Supervisor(paths, self.registry, clock=clock)
         self.discovery = Discovery(paths, self.registry, clock=clock)
         self.lock = threading.Lock()
-        self.states: dict[str, dict] = {}
+        self.states: dict[str, State] = {}
         self._serving = False
         self._stop = threading.Event()
 
@@ -50,7 +54,7 @@ class App:
             pass
         return secrets.token_hex(16)
 
-    def snapshot(self) -> list[dict]:
+    def snapshot(self) -> list[State]:
         order = load_json(self.paths.order).get("order", [])
         rank = {eid: i for i, eid in enumerate(order)}    # user's drag order; unranked → end, by id
         with self.lock:
@@ -68,7 +72,7 @@ class App:
                    {"url": f"http://{HOST}:{port}", "port": port, "pid": os.getpid(),
                     "started_at": self.clock()})
 
-    def shutdown(self, *_a) -> None:
+    def shutdown(self, *_a: object) -> None:
         self.supervisor.shutdown()                  # die-with-dod: kill every owned child
         if self._serving:
             # keep the token across restarts (open tabs stay valid); only drop conn info

@@ -6,13 +6,19 @@ probed concurrently in a thread pool, so a single hung dashboard can't freeze th
 """
 from __future__ import annotations
 
+import threading
 from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .app import App
+    from .models import State
 
 INTERVAL_S = 2.0
 MAX_WORKERS = 16
 
 
-def sample_once(app) -> dict[str, dict]:
+def sample_once(app: App) -> dict[str, State]:
     entries = app.registry.load()
     if not entries:
         return {}
@@ -21,7 +27,7 @@ def sample_once(app) -> dict[str, dict]:
     return dict(results)
 
 
-def run_sampler(app, stop_event):
+def run_sampler(app: App, stop_event: threading.Event) -> None:
     while not stop_event.is_set():
         try:
             snap = sample_once(app)

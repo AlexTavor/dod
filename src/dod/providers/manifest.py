@@ -23,8 +23,10 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import cast
 
 from ..config import Paths
+from ..models import Entry
 from ..util import load_json
 
 MANIFEST = "dod.project.json"
@@ -59,7 +61,7 @@ def find_manifests(roots: list[Path], max_depth: int = 4) -> list[Path]:
     return out
 
 
-def manifest_to_entry(mpath: Path) -> dict | None:
+def manifest_to_entry(mpath: Path) -> Entry | None:
     """Convert one manifest file into a registry-shaped entry (None if unusable)."""
     data = load_json(mpath)
     if not data.get("id") or not data.get("name"):
@@ -72,7 +74,7 @@ def manifest_to_entry(mpath: Path) -> dict | None:
     cwd = str(Path(cwd) if Path(cwd).is_absolute() else (mpath.parent / cwd))
     desc = str(data.get("description", ""))
     launchable = bool(cmd)
-    return {
+    return cast(Entry, {
         "id": data["id"],
         "name": data["name"],
         "blurb": desc,
@@ -87,7 +89,7 @@ def manifest_to_entry(mpath: Path) -> dict | None:
         "ready_timeout_s": run.get("ready_timeout_s", 25),
         "stop": run.get("stop") or ("sigterm" if launchable else "leave"),
         "singleton": run.get("singleton", True),
-    }
+    })
 
 
 class ManifestProvider:
@@ -97,14 +99,14 @@ class ManifestProvider:
         self.config = config or {}
         self._find = finder
         self.ttl = ttl
-        self._cache: list[dict] | None = None
+        self._cache: list[Entry] | None = None
         self._cache_at = 0.0
 
     @classmethod
     def from_paths(cls, paths: Paths) -> ManifestProvider:
         return cls(load_json(paths.home / "providers" / "manifest.json"))
 
-    def discover(self, paths: Paths) -> list[dict]:
+    def discover(self, paths: Paths) -> list[Entry]:
         now = time.monotonic()
         if self._cache is not None and (now - self._cache_at) < self.ttl:
             return self._cache
@@ -112,12 +114,12 @@ class ManifestProvider:
         self._cache_at = now
         return self._cache
 
-    def _scan(self) -> list[dict]:
+    def _scan(self) -> list[Entry]:
         cfg = self.config
         if cfg.get("enabled") is False:
             return []
         roots = [Path(r).expanduser() for r in cfg.get("roots") or [Path.home() / "Documents"]]
-        entries = []
+        entries: list[Entry] = []
         for m in self._find(roots, int(cfg.get("max_depth", 4))):
             e = manifest_to_entry(m)
             if e:
