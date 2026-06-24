@@ -18,6 +18,7 @@ call to no-op (return ``{"ok": False, ...}`` and mutate nothing).
 """
 from __future__ import annotations
 
+import contextlib
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -33,7 +34,7 @@ SHIM = """<!doctype html><html><head><meta charset="utf-8"><title>__TITLE__</tit
 <style>html,body{margin:0;height:100%;background:#16140f}</style>
 <script src="/dashkit.js"></script></head>
 <body><div id="dk"></div>
-<script>dashkit.mount({renderUrl:'/api/render', mount:'#dk', actionUrl:'/api/action'});</script></body></html>"""
+<script>dashkit.mount({renderUrl:'/api/render', mount:'#dk', actionUrl:'/api/action'});</script></body></html>"""  # noqa: E501
 
 
 def make_handler(meta: dict, render, on_action=None):
@@ -58,10 +59,8 @@ def make_handler(meta: dict, render, on_action=None):
             if no_cache:
                 self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
             self.end_headers()
-            try:
+            with contextlib.suppress(BrokenPipeError):
                 self.wfile.write(data)
-            except BrokenPipeError:
-                pass
 
         def do_GET(self):
             p = self.path.split("?", 1)[0]

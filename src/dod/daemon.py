@@ -48,7 +48,7 @@ def build_plist(paths: Paths, port: int) -> dict:
 def install(paths: Paths, port: int = DEFAULT_PORT) -> int:
     pp = plist_path()
     pp.parent.mkdir(parents=True, exist_ok=True)
-    with open(pp, "wb") as f:
+    with pp.open("wb") as f:
         plistlib.dump(build_plist(paths, port), f)
     subprocess.run(["launchctl", "unload", str(pp)], capture_output=True)
     r = subprocess.run(["launchctl", "load", "-w", str(pp)], capture_output=True, text=True)

@@ -16,7 +16,7 @@ dependencies = []   # runtime is stdlib-only by design: an always-on daemon shou
 dod = "dod.__main__:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.6", "mypy>=1.10"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dod"]
@@ -31,4 +31,36 @@ line-length = 110
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-extend-select = ["I"]
+# Curated, not maximal: rules that catch real defects without fighting dod's
+# deliberate style (relative imports, injectable seams with unused stub args).
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # flake8-bugbear
+    "C4",       # flake8-comprehensions
+    "SIM",      # flake8-simplify
+    "UP",       # pyupgrade
+    "PIE",      # flake8-pie
+    "RET",      # flake8-return
+    "PTH",      # flake8-use-pathlib
+    "BLE",      # flake8-blind-except — broad excepts must be deliberate (carry a # noqa + reason)
+    "N",        # pep8-naming
+    "RUF",      # ruff-specific
+]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # ambiguous unicode: the arrows/dots in docstrings are intentional
+]
+
+[tool.mypy]
+files = ["src/dod"]
+mypy_path = "src"
+python_version = "3.10"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+# Ratchet target (M3, once entries/states are TypedDict/dataclasses): enable `strict`.
+
+[tool.coverage.run]
+source = ["dod"]
+branch = true

@@ -101,7 +101,7 @@ class ManifestProvider:
         self._cache_at = 0.0
 
     @classmethod
-    def from_paths(cls, paths: Paths) -> "ManifestProvider":
+    def from_paths(cls, paths: Paths) -> ManifestProvider:
         return cls(load_json(paths.home / "providers" / "manifest.json"))
 
     def discover(self, paths: Paths) -> list[dict]:

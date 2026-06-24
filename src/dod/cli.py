@@ -100,7 +100,8 @@ def run(argv: list[str], paths: Paths | None = None) -> int:
         ap.add_argument("--blurb", default="")
         ap.add_argument("--why", default="")
         a = ap.parse_args(rest)
-        code, body = _api(paths, "POST", "/api/add", _add_payload(a.name, a.port, a.cmd, a.cwd, a.blurb, a.why))
+        code, body = _api(paths, "POST", "/api/add",
+                          _add_payload(a.name, a.port, a.cmd, a.cwd, a.blurb, a.why))
         print(json.dumps(body))
         return 0 if code == 200 and body.get("ok") else 1
     if cmd == "open":

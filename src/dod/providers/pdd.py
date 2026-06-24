@@ -79,7 +79,7 @@ class PddProvider:
         self._cache_at = 0.0
 
     @classmethod
-    def from_paths(cls, paths: Paths) -> "PddProvider":
+    def from_paths(cls, paths: Paths) -> PddProvider:
         cfg = load_json(paths.home / "providers" / "pdd.json")
         return cls(cfg)
 

@@ -32,7 +32,8 @@ class App:
         # stays valid through a daemon reload (per-boot rotation 403'd live tabs silently).
         self.token = token or self._load_or_make_token()
         self.clock = clock
-        self.registry = Registry(paths, providers=providers if providers is not None else default_providers(paths))
+        self.registry = Registry(
+            paths, providers=providers if providers is not None else default_providers(paths))
         self.supervisor = Supervisor(paths, self.registry, clock=clock)
         self.discovery = Discovery(paths, self.registry, clock=clock)
         self.lock = threading.Lock()
@@ -62,7 +63,7 @@ class App:
     # ── runtime files (token = the agent-control trust boundary) ────────
     def write_runtime_files(self, port: int) -> None:
         self.paths.token.write_text(self.token, encoding="utf-8")
-        os.chmod(self.paths.token, 0o600)
+        self.paths.token.chmod(0o600)
         write_json(self.paths.server,
                    {"url": f"http://{HOST}:{port}", "port": port, "pid": os.getpid(),
                     "started_at": self.clock()})
@@ -81,7 +82,10 @@ class App:
         self.discovery.load()
         self.write_runtime_files(port)
         threading.Thread(target=run_sampler, args=(self, self._stop), daemon=True).start()
-        signal.signal(signal.SIGTERM, lambda *a: (self.shutdown(), os._exit(0)))
+        def _on_sigterm(*_a):
+            self.shutdown()
+            os._exit(0)
+        signal.signal(signal.SIGTERM, _on_sigterm)
         n = len(self.registry.load())
         if not self.paths.registry.exists():
             print(f"dod: note no durable registry at {self.paths.registry} (run `dod init` to seed one)")
