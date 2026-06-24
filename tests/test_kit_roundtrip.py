@@ -162,3 +162,17 @@ def test_registered_but_dead_project_is_502(paths):
         assert _post(base, {"id": "dead", "action": "x"})[0] == 502
     finally:
         dod.shutdown()
+
+
+# ── standalone shim is real HTML (regression: _send json.dumps'd a str body) ──
+def test_standalone_shim_is_raw_html():
+    """GET / on a kit serves the shim as real HTML, not a JSON-escaped string, so opening
+    a kit's port directly renders the dashboard instead of showing escaped source."""
+    httpd, port = _kit(lambda: {"panels": []}, meta={"name": "K"})
+    try:
+        body = urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=4).read().decode()
+    finally:
+        httpd.shutdown()
+    assert body.startswith("<!doctype html>")      # not '"<!doctype...' (would mean JSON-encoded)
+    assert "<title>K</title>" in body              # the meta name is substituted into the shim
+    assert "dashkit.mount" in body
