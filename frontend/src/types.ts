@@ -78,6 +78,35 @@ export interface HtmlPanel {
   html?: string;
 }
 
+export interface Series {
+  name?: string;
+  values: Array<number | null>;
+}
+
+export interface ChartMarker {
+  x: string | number;
+  label?: string;
+  /** accent | err | ok tints the marker line and label. */
+  tone?: string;
+}
+
+export interface ChartPanel {
+  type: 'chart';
+  kind?: 'line' | 'area' | 'bars' | 'stacked' | 'spark' | 'hbar' | 'diverging';
+  title?: string;
+  series?: Series[];
+  /** Single-series shorthand for `series: [{ values }]`. */
+  values?: Array<number | null>;
+  /** X-axis labels; defaults to indices. */
+  x?: Array<string | number>;
+  label?: string;
+  color?: number;
+  markers?: ChartMarker[];
+  /** diverging only: left/right axis captions. */
+  left?: string;
+  right?: string;
+}
+
 /** Any atom dashkit does not (yet) know: rendered as a labelled fallback, never thrown. */
 export interface UnknownPanel {
   type: string;
@@ -94,4 +123,5 @@ export type Panel =
   | BadgePanel
   | ProsePanel
   | HtmlPanel
+  | ChartPanel
   | UnknownPanel;

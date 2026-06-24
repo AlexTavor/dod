@@ -3,6 +3,7 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 import type {
   BadgePanel,
+  ChartPanel,
   HtmlPanel,
   KvPanel,
   LogPanel,
@@ -13,6 +14,7 @@ import type {
   StatPanel,
   TablePanel,
 } from '../types';
+import { chart } from './charts';
 import { fmt } from './format';
 
 const section = (p: SectionPanel): TemplateResult =>
@@ -122,6 +124,8 @@ export function panel(p: Panel): TemplateResult {
         return stat(p as StatPanel);
       case 'progress':
         return progress(p as ProgressPanel);
+      case 'chart':
+        return chart(p as ChartPanel);
       case 'table':
         return table(p as TablePanel);
       case 'kv':
