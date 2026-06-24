@@ -57,7 +57,12 @@ def make_handler(meta: dict[str, Any], render: Callable[[], dict[str, Any]],
 
         def _send(self, code: int, obj: str | bytes | dict[str, Any],
                   ctype: str = "application/json", no_cache: bool = False) -> None:
-            data = obj if isinstance(obj, bytes) else json.dumps(obj).encode()
+            if isinstance(obj, bytes):
+                data = obj
+            elif isinstance(obj, str):
+                data = obj.encode()              # raw text (e.g. the HTML shim), not JSON-wrapped
+            else:
+                data = json.dumps(obj).encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(data)))
