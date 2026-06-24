@@ -2,7 +2,10 @@ import { html, type TemplateResult } from 'lit';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 import type {
+  ActionHandler,
+  ActionsPanel,
   BadgePanel,
+  ButtonPanel,
   ChartPanel,
   HtmlPanel,
   KvPanel,
@@ -114,8 +117,25 @@ const prose = (p: ProsePanel): TemplateResult => {
 const htmlAtom = (p: HtmlPanel): TemplateResult =>
   html`<div class="dk-panel dk-full">${unsafeHTML(p.html ?? '')}</div>`;
 
+// interact-down: each button carries {action, payload} and routes to the host's handler
+// (dod's /api/action proxy in the dod pane, or a standalone POST). A null handler is a no-op.
+const actions = (p: ActionsPanel, onAction?: ActionHandler): TemplateResult => html`
+  <div class="dk-panel dk-full">
+    ${p.title ? html`<div class="dk-l">${p.title}</div>` : ''}
+    <div class="dk-acts">
+      ${(p.buttons ?? []).map(
+        (b) => html`<button
+          class="dk-btn ${b.tone ?? ''}"
+          @click=${() => onAction?.(b.action ?? '', b.payload ?? {})}
+        >
+          ${b.label ?? b.action ?? 'action'}
+        </button>`,
+      )}
+    </div>
+  </div>`;
+
 /** Render one panel. A throwing atom yields an error panel rather than blanking the view. */
-export function panel(p: Panel): TemplateResult {
+export function panel(p: Panel, onAction?: ActionHandler): TemplateResult {
   try {
     switch (p.type) {
       case 'section':
@@ -138,6 +158,19 @@ export function panel(p: Panel): TemplateResult {
         return prose(p as ProsePanel);
       case 'html':
         return htmlAtom(p as HtmlPanel);
+      case 'actions':
+        return actions(p as ActionsPanel, onAction);
+      case 'button': {
+        const b = p as ButtonPanel;
+        return actions(
+          {
+            type: 'actions',
+            title: b.title,
+            buttons: [{ label: b.label, action: b.action, payload: b.payload, tone: b.tone }],
+          },
+          onAction,
+        );
+      }
       default:
         return html`<div class="dk-panel dk-full">
           <span class="dk-muted">unknown atom: ${p.type}</span>

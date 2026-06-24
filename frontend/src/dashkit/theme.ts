@@ -46,7 +46,10 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
 .dk-tick{fill:var(--dk-muted);font-size:11px;font-family:ui-monospace,monospace}
 .dk-cval{fill:var(--dk-fg);font-size:11px;font-family:ui-monospace,monospace}
 .dk-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--dk-muted);margin-top:4px}
-.dk-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}`;
+.dk-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.dk-acts{display:flex;flex-wrap:wrap;gap:6px}
+.dk-btn{cursor:pointer;border:1px solid var(--dk-line);background:var(--dk-panel);color:var(--dk-fg);border-radius:6px;padding:5px 12px;font:inherit}
+.dk-btn:hover{border-color:var(--dk-accent);color:var(--dk-accent)} .dk-btn[disabled]{opacity:.4;cursor:not-allowed}`;
 
 /** Inject the theme once. Idempotent and safe to call on every render. */
 export function injectCSS(): void {

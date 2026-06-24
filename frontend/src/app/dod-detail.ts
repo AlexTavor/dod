@@ -2,13 +2,14 @@ import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { mount as dashkitMount } from '../dashkit/index';
+import type { ActionHandler } from '../types';
 import { canStart, canStop, isLive, statusWord } from './status';
 import type { State } from './types';
 
 interface MountHandle {
   stop: () => void;
 }
-type MountFn = (opts: { renderUrl: string; mount: HTMLElement }) => MountHandle;
+type MountFn = (opts: { renderUrl: string; mount: HTMLElement; onAction: ActionHandler }) => MountHandle;
 
 /**
  * The right pane. Renders the selected entry's state (terminal / starting / crashed /
@@ -57,7 +58,20 @@ export class DodDetail extends LitElement {
     this.stopMount();
     if (e && isLive(e) && e.render === 'spec') {
       const host = this.querySelector<HTMLElement>('#dkhost');
-      if (host) this.handle = this.mountSpec({ renderUrl: `/api/render?id=${encodeURIComponent(e.id)}`, mount: host });
+      if (host) {
+        this.handle = this.mountSpec({
+          renderUrl: `/api/render?id=${encodeURIComponent(e.id)}`,
+          mount: host,
+          onAction: (action, payload) =>
+            this.dispatchEvent(
+              new CustomEvent('spec-action', {
+                detail: { id: e.id, action, payload },
+                bubbles: true,
+                composed: true,
+              }),
+            ),
+        });
+      }
     }
   }
 
