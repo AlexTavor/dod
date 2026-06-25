@@ -28,3 +28,14 @@ def test_pool_exhaustion_boundary(paths):
     a.allocate("k2")
     with pytest.raises(RuntimeError):
         a.allocate("k3")
+
+
+def test_default_pool_is_4300_through_4399(paths):
+    # mutation-grading gap: every other test passes explicit start/end, so the DEFAULT pool
+    # (what providers use via PortAllocator(paths.ports), e.g. pdd.py) went unpinned. This
+    # nails both bounds: 100 keys fill 4300..4399 exactly, and the 101st exhausts it.
+    a = PortAllocator(paths.ports)                         # no explicit bounds → defaults
+    allocated = {a.allocate(f"k{i}") for i in range(100)}
+    assert allocated == set(range(4300, 4400))
+    with pytest.raises(RuntimeError):
+        a.allocate("overflow")
