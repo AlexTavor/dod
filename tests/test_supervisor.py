@@ -1,3 +1,6 @@
+import os
+import threading
+
 import dod.probe as probe
 from tests.conftest import FakeProc, entry, my_lockfile
 
@@ -212,3 +215,49 @@ def test_reap_keeps_markers(sup, paths):
     sup._write_stop("d1")
     sup.reap_on_boot()                       # markers are not lockfiles → must survive
     assert paths.stopmark("d1").exists()
+
+
+# ── atlas risk-register regressions (R1, R2) ────────────────────────────
+def test_start_pgid_falls_back_to_pid_when_getpgid_fails(sup, monkeypatch):
+    # R2: if getpgid raises right after spawn, the lockfile must record the child's pid as
+    # the group id (start_new_session makes pid == pgid), never None — else _killpg no-ops
+    # and stop/shutdown orphan the tree.
+    def boom(_pid):
+        raise ProcessLookupError("no such process")
+    monkeypatch.setattr(os, "getpgid", boom)
+    assert sup.start(entry("d1", port=None))["state"] == "starting"
+    lf = sup._read_lock("d1")
+    assert lf["pgid"] is not None and lf["pgid"] == lf["pid"]
+
+
+def test_state_raw_is_race_safe_under_concurrent_stop(sup, monkeypatch):
+    # R1: _state_raw snapshots self.procs under the lock. Before the fix, a concurrent stop()
+    # popping the entry between the membership check and `self.procs[eid].poll()` raised KeyError
+    # out of the sampler. Drive that interleave hard; no exception may escape.
+    monkeypatch.setattr(probe, "port_open", lambda p: False)
+    monkeypatch.setattr(probe, "probe", lambda p, r: (False, True, None))
+    e = entry("d1", port=8077)
+    errors: list[Exception] = []
+    stop = threading.Event()
+
+    def reader() -> None:
+        while not stop.is_set():
+            try:
+                sup._state_raw(e)
+            except Exception as ex:  # noqa: BLE001 — capturing any escape is the point
+                errors.append(ex)
+
+    def churn() -> None:
+        for _ in range(4000):
+            with sup.lock:
+                sup.procs["d1"] = FakeProc(returncode=0)
+            with sup.lock:
+                sup.procs.pop("d1", None)
+        stop.set()
+
+    threads = [threading.Thread(target=reader), threading.Thread(target=churn)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors, errors[:3]

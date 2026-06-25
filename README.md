@@ -24,7 +24,7 @@ dod daemon install        # run dod as an always-on launchd agent
   even across an unclean crash. This is the cure for the "graveyard of broken sessions".
 - **Cross-project.** dod lives in `~/.dod` (override with `$DOD_HOME`) and supervises
   dashboards in many repos. Your real catalog is *user data* at `$DOD_HOME/registry.json`
-  — not committed here; see [`examples/registry.example.json`](examples/registry.example.json).
+  — not committed here; see [`registry.example.json`](src/dod/_examples/registry.example.json).
 
 ## Why it isn't deck anymore
 
