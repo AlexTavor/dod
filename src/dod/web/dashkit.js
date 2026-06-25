@@ -1,23 +1,122 @@
-/* dashkit.js — ONE universal renderer for first-party localhost data dashboards.
- *
- * A dashboard's backend emits a flat spec {title, refresh_ms, panels:[{type, ...}]};
- * this file renders it. The SAME file renders a dashboard standalone (its own ~10-line
- * shim page) AND inside deck's center pane — one renderer, zero per-dashboard frontend.
- *
- * Atoms (~8 + an escape hatch): section · stat · progress · chart(spark|line|bars|hbar|
- * stacked) · table · kv · log · badge · html. Read-only (v1); interactive atoms are v2.
- * Zero-dep, theme-aware via CSS vars scoped under .dk-root (so it never clobbers a host's
- * own :root — e.g. deck's chrome). Charts are hand-rolled SVG; swap to uPlot UNDER the
- * atom only if one outgrows SVG — the spec never changes.
- *
- * API:  dashkit.mount({renderUrl, mount, refreshMs?}) -> {stop()}   // poll + render a live spec
- *       dashkit.renderSpec(spec, el)                                 // render one spec object
- */
-(function () {
-  if (window.dashkit) return;                       // idempotent: deck loads it once, shims once
-
-  // ───────────────────────── theme + atom styles (scoped) ─────────────────────────
-  const CSS = `
+var dashkit=(function(e){Object.defineProperty(e,Symbol.toStringTag,{value:`Module`});var t=globalThis,n=t.ShadowRoot&&(t.ShadyCSS===void 0||t.ShadyCSS.nativeShadow)&&`adoptedStyleSheets`in Document.prototype&&`replace`in CSSStyleSheet.prototype,r=Symbol(),i=new WeakMap,a=class{constructor(e,t,n){if(this._$cssResult$=!0,n!==r)throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");this.cssText=e,this.t=t}get styleSheet(){let e=this.o,t=this.t;if(n&&e===void 0){let n=t!==void 0&&t.length===1;n&&(e=i.get(t)),e===void 0&&((this.o=e=new CSSStyleSheet).replaceSync(this.cssText),n&&i.set(t,e))}return e}toString(){return this.cssText}},o=e=>new a(typeof e==`string`?e:e+``,void 0,r),s=(e,r)=>{if(n)e.adoptedStyleSheets=r.map(e=>e instanceof CSSStyleSheet?e:e.styleSheet);else for(let n of r){let r=document.createElement(`style`),i=t.litNonce;i!==void 0&&r.setAttribute(`nonce`,i),r.textContent=n.cssText,e.appendChild(r)}},c=n?e=>e:e=>e instanceof CSSStyleSheet?(e=>{let t=``;for(let n of e.cssRules)t+=n.cssText;return o(t)})(e):e,{is:l,defineProperty:u,getOwnPropertyDescriptor:d,getOwnPropertyNames:f,getOwnPropertySymbols:p,getPrototypeOf:ee}=Object,m=globalThis,te=m.trustedTypes,ne=te?te.emptyScript:``,re=m.reactiveElementPolyfillSupport,h=(e,t)=>e,g={toAttribute(e,t){switch(t){case Boolean:e=e?ne:null;break;case Object:case Array:e=e==null?e:JSON.stringify(e)}return e},fromAttribute(e,t){let n=e;switch(t){case Boolean:n=e!==null;break;case Number:n=e===null?null:Number(e);break;case Object:case Array:try{n=JSON.parse(e)}catch{n=null}}return n}},_=(e,t)=>!l(e,t),ie={attribute:!0,type:String,converter:g,reflect:!1,useDefault:!1,hasChanged:_};Symbol.metadata??=Symbol(`metadata`),m.litPropertyMetadata??=new WeakMap;var v=class extends HTMLElement{static addInitializer(e){this._$Ei(),(this.l??=[]).push(e)}static get observedAttributes(){return this.finalize(),this._$Eh&&[...this._$Eh.keys()]}static createProperty(e,t=ie){if(t.state&&(t.attribute=!1),this._$Ei(),this.prototype.hasOwnProperty(e)&&((t=Object.create(t)).wrapped=!0),this.elementProperties.set(e,t),!t.noAccessor){let n=Symbol(),r=this.getPropertyDescriptor(e,n,t);r!==void 0&&u(this.prototype,e,r)}}static getPropertyDescriptor(e,t,n){let{get:r,set:i}=d(this.prototype,e)??{get(){return this[t]},set(e){this[t]=e}};return{get:r,set(t){let a=r?.call(this);i?.call(this,t),this.requestUpdate(e,a,n)},configurable:!0,enumerable:!0}}static getPropertyOptions(e){return this.elementProperties.get(e)??ie}static _$Ei(){if(this.hasOwnProperty(h(`elementProperties`)))return;let e=ee(this);e.finalize(),e.l!==void 0&&(this.l=[...e.l]),this.elementProperties=new Map(e.elementProperties)}static finalize(){if(this.hasOwnProperty(h(`finalized`)))return;if(this.finalized=!0,this._$Ei(),this.hasOwnProperty(h(`properties`))){let e=this.properties,t=[...f(e),...p(e)];for(let n of t)this.createProperty(n,e[n])}let e=this[Symbol.metadata];if(e!==null){let t=litPropertyMetadata.get(e);if(t!==void 0)for(let[e,n]of t)this.elementProperties.set(e,n)}this._$Eh=new Map;for(let[e,t]of this.elementProperties){let n=this._$Eu(e,t);n!==void 0&&this._$Eh.set(n,e)}this.elementStyles=this.finalizeStyles(this.styles)}static finalizeStyles(e){let t=[];if(Array.isArray(e)){let n=new Set(e.flat(1/0).reverse());for(let e of n)t.unshift(c(e))}else e!==void 0&&t.push(c(e));return t}static _$Eu(e,t){let n=t.attribute;return!1===n?void 0:typeof n==`string`?n:typeof e==`string`?e.toLowerCase():void 0}constructor(){super(),this._$Ep=void 0,this.isUpdatePending=!1,this.hasUpdated=!1,this._$Em=null,this._$Ev()}_$Ev(){this._$ES=new Promise(e=>this.enableUpdating=e),this._$AL=new Map,this._$E_(),this.requestUpdate(),this.constructor.l?.forEach(e=>e(this))}addController(e){(this._$EO??=new Set).add(e),this.renderRoot!==void 0&&this.isConnected&&e.hostConnected?.()}removeController(e){this._$EO?.delete(e)}_$E_(){let e=new Map,t=this.constructor.elementProperties;for(let n of t.keys())this.hasOwnProperty(n)&&(e.set(n,this[n]),delete this[n]);e.size>0&&(this._$Ep=e)}createRenderRoot(){let e=this.shadowRoot??this.attachShadow(this.constructor.shadowRootOptions);return s(e,this.constructor.elementStyles),e}connectedCallback(){this.renderRoot??=this.createRenderRoot(),this.enableUpdating(!0),this._$EO?.forEach(e=>e.hostConnected?.())}enableUpdating(e){}disconnectedCallback(){this._$EO?.forEach(e=>e.hostDisconnected?.())}attributeChangedCallback(e,t,n){this._$AK(e,n)}_$ET(e,t){let n=this.constructor.elementProperties.get(e),r=this.constructor._$Eu(e,n);if(r!==void 0&&!0===n.reflect){let i=(n.converter?.toAttribute===void 0?g:n.converter).toAttribute(t,n.type);this._$Em=e,i==null?this.removeAttribute(r):this.setAttribute(r,i),this._$Em=null}}_$AK(e,t){let n=this.constructor,r=n._$Eh.get(e);if(r!==void 0&&this._$Em!==r){let e=n.getPropertyOptions(r),i=typeof e.converter==`function`?{fromAttribute:e.converter}:e.converter?.fromAttribute===void 0?g:e.converter;this._$Em=r;let a=i.fromAttribute(t,e.type);this[r]=a??this._$Ej?.get(r)??a,this._$Em=null}}requestUpdate(e,t,n,r=!1,i){if(e!==void 0){let a=this.constructor;if(!1===r&&(i=this[e]),n??=a.getPropertyOptions(e),!((n.hasChanged??_)(i,t)||n.useDefault&&n.reflect&&i===this._$Ej?.get(e)&&!this.hasAttribute(a._$Eu(e,n))))return;this.C(e,t,n)}!1===this.isUpdatePending&&(this._$ES=this._$EP())}C(e,t,{useDefault:n,reflect:r,wrapped:i},a){n&&!(this._$Ej??=new Map).has(e)&&(this._$Ej.set(e,a??t??this[e]),!0!==i||a!==void 0)||(this._$AL.has(e)||(this.hasUpdated||n||(t=void 0),this._$AL.set(e,t)),!0===r&&this._$Em!==e&&(this._$Eq??=new Set).add(e))}async _$EP(){this.isUpdatePending=!0;try{await this._$ES}catch(e){Promise.reject(e)}let e=this.scheduleUpdate();return e!=null&&await e,!this.isUpdatePending}scheduleUpdate(){return this.performUpdate()}performUpdate(){if(!this.isUpdatePending)return;if(!this.hasUpdated){if(this.renderRoot??=this.createRenderRoot(),this._$Ep){for(let[e,t]of this._$Ep)this[e]=t;this._$Ep=void 0}let e=this.constructor.elementProperties;if(e.size>0)for(let[t,n]of e){let{wrapped:e}=n,r=this[t];!0!==e||this._$AL.has(t)||r===void 0||this.C(t,void 0,n,r)}}let e=!1,t=this._$AL;try{e=this.shouldUpdate(t),e?(this.willUpdate(t),this._$EO?.forEach(e=>e.hostUpdate?.()),this.update(t)):this._$EM()}catch(t){throw e=!1,this._$EM(),t}e&&this._$AE(t)}willUpdate(e){}_$AE(e){this._$EO?.forEach(e=>e.hostUpdated?.()),this.hasUpdated||(this.hasUpdated=!0,this.firstUpdated(e)),this.updated(e)}_$EM(){this._$AL=new Map,this.isUpdatePending=!1}get updateComplete(){return this.getUpdateComplete()}getUpdateComplete(){return this._$ES}shouldUpdate(e){return!0}update(e){this._$Eq&&=this._$Eq.forEach(e=>this._$ET(e,this[e])),this._$EM()}updated(e){}firstUpdated(e){}};v.elementStyles=[],v.shadowRootOptions={mode:`open`},v[h(`elementProperties`)]=new Map,v[h(`finalized`)]=new Map,re?.({ReactiveElement:v}),(m.reactiveElementVersions??=[]).push(`2.1.2`);var y=globalThis,b=e=>e,x=y.trustedTypes,ae=x?x.createPolicy(`lit-html`,{createHTML:e=>e}):void 0,oe=`$lit$`,S=`lit$${Math.random().toFixed(9).slice(2)}$`,se=`?`+S,ce=`<${se}>`,C=document,w=()=>C.createComment(``),T=e=>e===null||typeof e!=`object`&&typeof e!=`function`,E=Array.isArray,le=e=>E(e)||typeof e?.[Symbol.iterator]==`function`,D=`[ 	
+\f\r]`,O=/<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g,ue=/-->/g,de=/>/g,k=RegExp(`>|${D}(?:([^\\s"'>=/]+)(${D}*=${D}*(?:[^ \t\n\f\r"'\`<>=]|("|')|))|$)`,`g`),fe=/'/g,pe=/"/g,A=/^(?:script|style|textarea|title)$/i,me=e=>(t,...n)=>({_$litType$:e,strings:t,values:n}),j=me(1),M=me(2),N=Symbol.for(`lit-noChange`),P=Symbol.for(`lit-nothing`),he=new WeakMap,F=C.createTreeWalker(C,129);function ge(e,t){if(!E(e)||!e.hasOwnProperty(`raw`))throw Error(`invalid template strings array`);return ae===void 0?t:ae.createHTML(t)}var _e=(e,t)=>{let n=e.length-1,r=[],i,a=t===2?`<svg>`:t===3?`<math>`:``,o=O;for(let t=0;t<n;t++){let n=e[t],s,c,l=-1,u=0;for(;u<n.length&&(o.lastIndex=u,c=o.exec(n),c!==null);)u=o.lastIndex,o===O?c[1]===`!--`?o=ue:c[1]===void 0?c[2]===void 0?c[3]!==void 0&&(o=k):(A.test(c[2])&&(i=RegExp(`</`+c[2],`g`)),o=k):o=de:o===k?c[0]===`>`?(o=i??O,l=-1):c[1]===void 0?l=-2:(l=o.lastIndex-c[2].length,s=c[1],o=c[3]===void 0?k:c[3]===`"`?pe:fe):o===pe||o===fe?o=k:o===ue||o===de?o=O:(o=k,i=void 0);let d=o===k&&e[t+1].startsWith(`/>`)?` `:``;a+=o===O?n+ce:l>=0?(r.push(s),n.slice(0,l)+oe+n.slice(l)+S+d):n+S+(l===-2?t:d)}return[ge(e,a+(e[n]||`<?>`)+(t===2?`</svg>`:t===3?`</math>`:``)),r]},I=class e{constructor({strings:t,_$litType$:n},r){let i;this.parts=[];let a=0,o=0,s=t.length-1,c=this.parts,[l,u]=_e(t,n);if(this.el=e.createElement(l,r),F.currentNode=this.el.content,n===2||n===3){let e=this.el.content.firstChild;e.replaceWith(...e.childNodes)}for(;(i=F.nextNode())!==null&&c.length<s;){if(i.nodeType===1){if(i.hasAttributes())for(let e of i.getAttributeNames())if(e.endsWith(oe)){let t=u[o++],n=i.getAttribute(e).split(S),r=/([.?@])?(.*)/.exec(t);c.push({type:1,index:a,name:r[2],strings:n,ctor:r[1]===`.`?ye:r[1]===`?`?be:r[1]===`@`?xe:z}),i.removeAttribute(e)}else e.startsWith(S)&&(c.push({type:6,index:a}),i.removeAttribute(e));if(A.test(i.tagName)){let e=i.textContent.split(S),t=e.length-1;if(t>0){i.textContent=x?x.emptyScript:``;for(let n=0;n<t;n++)i.append(e[n],w()),F.nextNode(),c.push({type:2,index:++a});i.append(e[t],w())}}}else if(i.nodeType===8)if(i.data===se)c.push({type:2,index:a});else{let e=-1;for(;(e=i.data.indexOf(S,e+1))!==-1;)c.push({type:7,index:a}),e+=S.length-1}a++}}static createElement(e,t){let n=C.createElement(`template`);return n.innerHTML=e,n}};function L(e,t,n=e,r){if(t===N)return t;let i=r===void 0?n._$Cl:n._$Co?.[r],a=T(t)?void 0:t._$litDirective$;return i?.constructor!==a&&(i?._$AO?.(!1),a===void 0?i=void 0:(i=new a(e),i._$AT(e,n,r)),r===void 0?n._$Cl=i:(n._$Co??=[])[r]=i),i!==void 0&&(t=L(e,i._$AS(e,t.values),i,r)),t}var ve=class{constructor(e,t){this._$AV=[],this._$AN=void 0,this._$AD=e,this._$AM=t}get parentNode(){return this._$AM.parentNode}get _$AU(){return this._$AM._$AU}u(e){let{el:{content:t},parts:n}=this._$AD,r=(e?.creationScope??C).importNode(t,!0);F.currentNode=r;let i=F.nextNode(),a=0,o=0,s=n[0];for(;s!==void 0;){if(a===s.index){let t;s.type===2?t=new R(i,i.nextSibling,this,e):s.type===1?t=new s.ctor(i,s.name,s.strings,this,e):s.type===6&&(t=new Se(i,this,e)),this._$AV.push(t),s=n[++o]}a!==s?.index&&(i=F.nextNode(),a++)}return F.currentNode=C,r}p(e){let t=0;for(let n of this._$AV)n!==void 0&&(n.strings===void 0?n._$AI(e[t]):(n._$AI(e,n,t),t+=n.strings.length-2)),t++}},R=class e{get _$AU(){return this._$AM?._$AU??this._$Cv}constructor(e,t,n,r){this.type=2,this._$AH=P,this._$AN=void 0,this._$AA=e,this._$AB=t,this._$AM=n,this.options=r,this._$Cv=r?.isConnected??!0}get parentNode(){let e=this._$AA.parentNode,t=this._$AM;return t!==void 0&&e?.nodeType===11&&(e=t.parentNode),e}get startNode(){return this._$AA}get endNode(){return this._$AB}_$AI(e,t=this){e=L(this,e,t),T(e)?e===P||e==null||e===``?(this._$AH!==P&&this._$AR(),this._$AH=P):e!==this._$AH&&e!==N&&this._(e):e._$litType$===void 0?e.nodeType===void 0?le(e)?this.k(e):this._(e):this.T(e):this.$(e)}O(e){return this._$AA.parentNode.insertBefore(e,this._$AB)}T(e){this._$AH!==e&&(this._$AR(),this._$AH=this.O(e))}_(e){this._$AH!==P&&T(this._$AH)?this._$AA.nextSibling.data=e:this.T(C.createTextNode(e)),this._$AH=e}$(e){let{values:t,_$litType$:n}=e,r=typeof n==`number`?this._$AC(e):(n.el===void 0&&(n.el=I.createElement(ge(n.h,n.h[0]),this.options)),n);if(this._$AH?._$AD===r)this._$AH.p(t);else{let e=new ve(r,this),n=e.u(this.options);e.p(t),this.T(n),this._$AH=e}}_$AC(e){let t=he.get(e.strings);return t===void 0&&he.set(e.strings,t=new I(e)),t}k(t){E(this._$AH)||(this._$AH=[],this._$AR());let n=this._$AH,r,i=0;for(let a of t)i===n.length?n.push(r=new e(this.O(w()),this.O(w()),this,this.options)):r=n[i],r._$AI(a),i++;i<n.length&&(this._$AR(r&&r._$AB.nextSibling,i),n.length=i)}_$AR(e=this._$AA.nextSibling,t){for(this._$AP?.(!1,!0,t);e!==this._$AB;){let t=b(e).nextSibling;b(e).remove(),e=t}}setConnected(e){this._$AM===void 0&&(this._$Cv=e,this._$AP?.(e))}},z=class{get tagName(){return this.element.tagName}get _$AU(){return this._$AM._$AU}constructor(e,t,n,r,i){this.type=1,this._$AH=P,this._$AN=void 0,this.element=e,this.name=t,this._$AM=r,this.options=i,n.length>2||n[0]!==``||n[1]!==``?(this._$AH=Array(n.length-1).fill(new String),this.strings=n):this._$AH=P}_$AI(e,t=this,n,r){let i=this.strings,a=!1;if(i===void 0)e=L(this,e,t,0),a=!T(e)||e!==this._$AH&&e!==N,a&&(this._$AH=e);else{let r=e,o,s;for(e=i[0],o=0;o<i.length-1;o++)s=L(this,r[n+o],t,o),s===N&&(s=this._$AH[o]),a||=!T(s)||s!==this._$AH[o],s===P?e=P:e!==P&&(e+=(s??``)+i[o+1]),this._$AH[o]=s}a&&!r&&this.j(e)}j(e){e===P?this.element.removeAttribute(this.name):this.element.setAttribute(this.name,e??``)}},ye=class extends z{constructor(){super(...arguments),this.type=3}j(e){this.element[this.name]=e===P?void 0:e}},be=class extends z{constructor(){super(...arguments),this.type=4}j(e){this.element.toggleAttribute(this.name,!!e&&e!==P)}},xe=class extends z{constructor(e,t,n,r,i){super(e,t,n,r,i),this.type=5}_$AI(e,t=this){if((e=L(this,e,t,0)??P)===N)return;let n=this._$AH,r=e===P&&n!==P||e.capture!==n.capture||e.once!==n.once||e.passive!==n.passive,i=e!==P&&(n===P||r);r&&this.element.removeEventListener(this.name,this,n),i&&this.element.addEventListener(this.name,this,e),this._$AH=e}handleEvent(e){typeof this._$AH==`function`?this._$AH.call(this.options?.host??this.element,e):this._$AH.handleEvent(e)}},Se=class{constructor(e,t,n){this.element=e,this.type=6,this._$AN=void 0,this._$AM=t,this.options=n}get _$AU(){return this._$AM._$AU}_$AI(e){L(this,e)}},Ce=y.litHtmlPolyfillSupport;Ce?.(I,R),(y.litHtmlVersions??=[]).push(`3.3.3`);var B=(e,t,n)=>{let r=n?.renderBefore??t,i=r._$litPart$;if(i===void 0){let e=n?.renderBefore??null;r._$litPart$=i=new R(t.insertBefore(w(),e),e,void 0,n??{})}return i._$AI(e),i},V=globalThis,H=class extends v{constructor(){super(...arguments),this.renderOptions={host:this},this._$Do=void 0}createRenderRoot(){let e=super.createRenderRoot();return this.renderOptions.renderBefore??=e.firstChild,e}update(e){let t=this.render();this.hasUpdated||(this.renderOptions.isConnected=this.isConnected),super.update(e),this._$Do=B(t,this.renderRoot,this.renderOptions)}connectedCallback(){super.connectedCallback(),this._$Do?.setConnected(!0)}disconnectedCallback(){super.disconnectedCallback(),this._$Do?.setConnected(!1)}render(){return N}};H._$litElement$=!0,H.finalized=!0,V.litElementHydrateSupport?.({LitElement:H});var we=V.litElementPolyfillSupport;we?.({LitElement:H}),(V.litElementVersions??=[]).push(`4.2.2`);var Te={ATTRIBUTE:1,CHILD:2,PROPERTY:3,BOOLEAN_ATTRIBUTE:4,EVENT:5,ELEMENT:6},Ee=e=>(...t)=>({_$litDirective$:e,values:t}),De=class{constructor(e){}get _$AU(){return this._$AM._$AU}_$AT(e,t,n){this._$Ct=e,this._$AM=t,this._$Ci=n}_$AS(e,t){return this.update(e,t)}update(e,t){return this.render(...t)}},U=class extends De{constructor(e){if(super(e),this.it=P,e.type!==Te.CHILD)throw Error(this.constructor.directiveName+`() can only be used in child bindings`)}render(e){if(e===P||e==null)return this._t=void 0,this.it=e;if(e===N)return e;if(typeof e!=`string`)throw Error(this.constructor.directiveName+`() called with a non-string value`);if(e===this.it)return this._t;this.it=e;let t=[e];return t.raw=t,this._t={_$litType$:this.constructor.resultType,strings:t,values:[]}}};U.directiveName=`unsafeHTML`,U.resultType=1;var Oe=Ee(U),ke=[`var(--dk-c1)`,`var(--dk-c2)`,`var(--dk-c3)`,`var(--dk-c4)`,`var(--dk-c5)`,`var(--dk-c6)`],W=e=>ke[((Number(e)||0)%6+6)%6];function G(e){return e==null?`–`:typeof e==`number`?Number.isFinite(e)?Number.isInteger(e)?e.toLocaleString():Math.abs(e)>=1e3?e.toLocaleString(void 0,{maximumFractionDigits:1}):e.toFixed(2):`–`:String(e)}function Ae(e){let t=Number(e)||0,n=Math.abs(t);return n>=1e9?`${(t/1e9).toFixed(1)}B`:n>=1e6?`${(t/1e6).toFixed(1)}M`:n>=1e3?`${(t/1e3).toFixed(1)}k`:Number.isInteger(t)?String(t):t.toFixed(2)}function je(e){return typeof e==`string`&&/^\d{4}-\d{2}-\d{2}/.test(e)?e.slice(0,10):String(e)}function K(e,t){let n=String(e);return n.length>t?`${n.slice(0,t-1)}…`:n}function Me(e,t){let n=e.length,r=e.filter(e=>e!=null&&Number.isFinite(e));if(r.length<2)return j`<svg viewBox="0 0 ${240} ${46}"></svg>`;let i=Math.min(...r),a=Math.max(...r)-i||1,o=e=>4+e/(n-1)*232,s=e=>42-(e-i)/a*38,c=``,l=!1;return e.forEach((e,t)=>{if(e==null||!Number.isFinite(e)){l=!1;return}c+=`${l?`L`:`M`}${o(t).toFixed(1)},${s(e).toFixed(1)} `,l=!0}),j`<svg viewBox="0 0 ${240} ${46}" preserveAspectRatio="none">
+    <path d=${c} fill="none" stroke=${t} stroke-width="1.6"></path>
+  </svg>`}var Ne=e=>e===`accent`?`var(--dk-accent)`:e===`err`?`var(--dk-err)`:e===`ok`?`var(--dk-ok)`:`var(--dk-muted)`;function Pe(e,t,n,r){let i={l:60,r:14,t:22,b:72},a=820-i.l-i.r,o=340-i.t-i.b,s=t.length,c=n.length>1,l=0;if(e===`stacked`)for(let e=0;e<s;e++){let t=0;n.forEach(n=>{t+=Math.max(0,Number(n.values[e])||0)}),l=Math.max(l,t)}else n.forEach(e=>e.values.forEach(e=>{l=Math.max(l,Number(e)||0)}));l||=1;let u=e=>i.t+o-e/l*o,d=a/Math.max(1,s),f=e=>i.l+d*e+d/2,p=[];for(let e=0;e<=4;e++){let t=l*e/4,n=u(t);p.push(M`<line class="dk-grid" x1=${i.l} y1=${n} x2=${i.l+a} y2=${n}></line>
+      <text class="dk-tick" x=${i.l-8} y=${n+4} text-anchor="end">${Ae(t)}</text>`)}let ee=s>18?Math.ceil(s/18):1;for(let e=0;e<s;e++){if(e%ee)continue;let n=f(e),r=i.t+o+15;p.push(M`<text class="dk-tick" x=${n} y=${r} text-anchor="end" transform=${`rotate(-35 ${n} ${r})`}>${K(je(t[e]),18)}</text>`)}if(e===`bar`||e===`stacked`){let t=n.length;if(e===`stacked`)for(let e=0;e<s;e++){let t=0;n.forEach((n,r)=>{let i=Math.max(0,Number(n.values[e])||0),a=u(t),o=u(t+i);t+=i;let s=d*.7;p.push(M`<rect x=${f(e)-s/2} y=${o} width=${s} height=${Math.max(0,a-o)} fill=${W(r)}></rect>`)})}else{let e=d*.72,r=c?e/t:e;for(let t=0;t<s;t++)n.forEach((n,a)=>{let s=u(Math.max(0,Number(n.values[t])||0)),l=c?f(t)-e/2+a*r:f(t)-e/2;p.push(M`<rect x=${l} y=${s} width=${Math.max(1,r-(c?1.5:0))} height=${Math.max(0,i.t+o-s)} fill=${W(c?a:0)}></rect>`)})}}else n.forEach((t,n)=>{let r=t.values.map((e,t)=>`${f(t)},${u(Math.max(0,Number(e)||0))}`).join(` `);e===`area`&&!c&&p.push(M`<polygon points=${`${f(0)},${i.t+o} ${r} ${f(s-1)},${i.t+o}`} fill=${W(0)} opacity=".18"></polygon>`),p.push(M`<polyline points=${r} fill="none" stroke=${W(n)} stroke-width="2"></polyline>`),t.values.forEach((e,t)=>p.push(M`<circle cx=${f(t)} cy=${u(Math.max(0,Number(e)||0))} r="2.6" fill=${W(n)}></circle>`))});return p.push(M`<line class="dk-axis" x1=${i.l} y1=${i.t+o} x2=${i.l+a} y2=${i.t+o}></line>
+    <line class="dk-axis" x1=${i.l} y1=${i.t} x2=${i.l} y2=${i.t+o}></line>`),(r??[]).forEach(e=>{let n=t.indexOf(e.x);if(n<0)return;let r=f(n),a=Ne(e.tone);p.push(M`<line x1=${r} y1=${i.t} x2=${r} y2=${i.t+o} stroke=${a} stroke-width="1" stroke-dasharray="3 3" opacity=".85"></line>`),e.label&&p.push(M`<text x=${r} y=${i.t-6} text-anchor="middle" class="dk-tick" fill=${a}>${e.label}</text>`)}),j`<svg viewBox="0 0 ${820} ${340}">${p}</svg>${c?j`<div class="dk-legend">
+        ${n.map((e,t)=>j`<span><i style="background:${W(t)}"></i>${e.name??``}</span>`)}
+      </div>`:``}`}function Fe(e,t,n,r){let i={l:140,r:70,t:8,b:20},a=e.length,o=i.t+i.b+a*30,s=820-i.l-i.r,c=i.l+s/2,l=s/2,u=[M`<line class="dk-axis" x1=${c} y1=${i.t} x2=${c} y2=${i.t+a*30}></line>`];return t.forEach((t,n)=>{let r=Math.max(-1,Math.min(1,Number(t)||0)),a=i.t+n*30,o=Math.abs(r)*l,s=r>=0?c:c-o,d=r>=0?`var(--dk-c1)`:`var(--dk-c2)`;u.push(M`<text class="dk-tick" x=${i.l-10} y=${a+30/2+4} text-anchor="end">${K(e[n],20)}</text>
+      <rect x=${s} y=${a+5} width=${Math.max(1,o)} height=${18} rx="2" fill=${d}></rect>
+      <text class="dk-cval" x=${r>=0?c+o+6:c-o-6} y=${a+30/2+4} text-anchor=${r>=0?`start`:`end`}>${r>0?`+`:``}${r.toFixed(2)}</text>`)}),u.push(M`<text class="dk-tick" x=${i.l} y=${i.t+a*30+14} text-anchor="start">← ${n??`them`}</text>
+    <text class="dk-tick" x=${i.l+s} y=${i.t+a*30+14} text-anchor="end">${r??`you`} →</text>`),j`<svg viewBox="0 0 ${820} ${o}">${u}</svg>`}function Ie(e,t){let n={l:210,r:64,t:6,b:6},r=e.length,i=n.t+n.b+r*22,a=820-n.l-n.r,o=Math.max(...t.map(e=>Number(e)||0),0)||1,s=[];return t.forEach((t,r)=>{let i=n.t+r*22,c=Math.max(0,(Number(t)||0)/o*a);s.push(M`<text class="dk-tick" x=${n.l-8} y=${i+22/2+4} text-anchor="end">${K(je(e[r]),30)}</text>
+      <rect x=${n.l} y=${i+3} width=${c} height=${16} fill=${W(0)}></rect>
+      <text class="dk-cval" x=${n.l+c+6} y=${i+22/2+4}>${Ae(Number(t)||0)}</text>`)}),j`<svg viewBox="0 0 ${820} ${i}">${s}</svg>`}function Le(e){let t=e.kind??`line`,n=e.series??(e.values?[{name:e.label??``,values:e.values}]:[]),r=e.x??(n[0]?n[0].values.map((e,t)=>t):[]),i=n[0]?.values??[],a;return a=t===`spark`?Me(i,W(e.color??0)):t===`diverging`?Fe(r,i,e.left,e.right):t===`hbar`?Ie(r,i):Pe(t===`bars`?`bar`:t===`stacked`?`stacked`:t===`area`?`area`:`line`,r,n,e.markers),j`<div class="dk-panel dk-chart ${t===`spark`?``:`dk-full`}">
+    ${e.title?j`<div class="dk-l">${e.title}</div>`:``}${a}
+  </div>`}var q=e=>(t,n)=>{n===void 0?customElements.define(e,t):n.addInitializer(()=>{customElements.define(e,t)})},Re={attribute:!0,type:String,converter:g,reflect:!1,hasChanged:_},ze=(e=Re,t,n)=>{let{kind:r,metadata:i}=n,a=globalThis.litPropertyMetadata.get(i);if(a===void 0&&globalThis.litPropertyMetadata.set(i,a=new Map),r===`setter`&&((e=Object.create(e)).wrapped=!0),a.set(n.name,e),r===`accessor`){let{name:r}=n;return{set(n){let i=t.get.call(this);t.set.call(this,n),this.requestUpdate(r,i,e,!0,n)},init(t){return t!==void 0&&this.C(r,void 0,e,t),t}}}if(r===`setter`){let{name:r}=n;return function(n){let i=this[r];t.call(this,n),this.requestUpdate(r,i,e,!0,n)}}throw Error(`Unsupported decorator location: `+r)};function J(e){return(t,n)=>typeof n==`object`?ze(e,t,n):((e,t,n)=>{let r=t.hasOwnProperty(n);return t.constructor.createProperty(n,e),r?Object.getOwnPropertyDescriptor(t,n):void 0})(e,t,n)}function Y(e){return J({...e,state:!0,attribute:!1})}function X(e,t,n,r){var i=arguments.length,a=i<3?t:r===null?r=Object.getOwnPropertyDescriptor(t,n):r,o;if(typeof Reflect==`object`&&typeof Reflect.decorate==`function`)a=Reflect.decorate(e,t,n,r);else for(var s=e.length-1;s>=0;s--)(o=e[s])&&(a=(i<3?o(a):i>3?o(t,n,a):o(t,n))||a);return i>3&&a&&Object.defineProperty(t,n,a),a}var Z=class extends H{constructor(...e){super(...e),this.panel={type:`form`},this.values={},this.dirty=!1}createRenderRoot(){return this}willUpdate(e){if(e.has(`panel`)&&!this.dirty){let e={};for(let t of this.panel.fields??[])e[t.key]=t.value??(t.kind===`checkbox`?!1:``);this.values=e}}set(e,t){this.values={...this.values,[e]:t},this.dirty=!0}field(e){let t=this.values[e.key],n=j`<span class="dk-fl">${e.label??e.key}</span>`;return e.kind===`textarea`?j`<label class="dk-f dk-full"
+        >${n}<textarea
+          .value=${t==null?``:String(t)}
+          @input=${t=>this.set(e.key,t.target.value)}
+        ></textarea
+      ></label>`:e.kind===`select`?j`<label class="dk-f"
+        >${n}<select @change=${t=>this.set(e.key,t.target.value)}>
+          ${(e.options??[]).map(e=>j`<option value=${e.value} ?selected=${String(e.value)===String(t)}>${e.label??e.value}</option>`)}
+        </select></label
+      >`:e.kind===`checkbox`?j`<label class="dk-f dk-fcheck"
+        ><input
+          type="checkbox"
+          .checked=${!!t}
+          @change=${t=>this.set(e.key,t.target.checked)}
+        />${n}</label
+      >`:j`<label class="dk-f"
+      >${n}<input
+        type=${e.kind===`number`?`number`:`text`}
+        .value=${t==null?``:String(t)}
+        @input=${t=>{let n=t.target;this.set(e.key,e.kind===`number`?n.value===``?null:Number(n.value):n.value)}}
+    /></label>`}submit(){this.onAction?.(this.panel.action??`save`,{...this.panel.context??{},values:this.values}),this.dirty=!1}cancel(){this.dirty=!1,this.panel.cancelAction&&this.onAction?.(this.panel.cancelAction,{})}render(){let e=this.panel;return j`<div class="dk-panel dk-full">
+      ${e.title?j`<div class="dk-l">${e.title}</div>`:``}
+      <div class="dk-form">${(e.fields??[]).map(e=>this.field(e))}</div>
+      <div class="dk-acts">
+        <button class="dk-btn" @click=${()=>this.submit()}>${e.submitLabel??`Save`}</button>
+        ${e.cancelAction?j`<button class="dk-btn" @click=${()=>this.cancel()}>Cancel</button>`:``}
+      </div>
+    </div>`}};X([J({attribute:!1})],Z.prototype,`panel`,void 0),X([J({attribute:!1})],Z.prototype,`onAction`,void 0),X([Y()],Z.prototype,`values`,void 0),X([Y()],Z.prototype,`dirty`,void 0),Z=X([q(`dk-form`)],Z);var Q={warm:`var(--dk-accent)`,cool:`var(--dk-c6)`,you:`var(--dk-c1)`,them:`var(--dk-c2)`,ok:`var(--dk-ok)`,err:`var(--dk-err)`},$=class extends H{constructor(...e){super(...e),this.panel={type:`wordcloud`},this.view=`cloud`,this.fkey=null}createRenderRoot(){return this}facets(){return(this.panel.facets??[]).filter(e=>e.terms&&e.terms.length)}current(){let e=this.facets();return e.find(e=>e.key===this.fkey)??e[0]}body(){let e=this.current();if(!e?.terms?.length)return j`<div class="dk-muted">no terms for this lens</div>`;let t=e.legend&&e.legend.length?j`<div class="dk-legend">
+            ${e.legend.map(e=>j`<span><i style="background:${Q[e.tone??``]??W(0)}"></i>${e.label}</span>`)}
+          </div>`:``,n=[...e.terms].sort((e,t)=>(Number(t.weight)||0)-(Number(e.weight)||0));if(this.view===`bars`){let e=n.slice(0,22);return j`${t}${Ie(e.map(e=>e.text),e.map(e=>Number(e.weight)||0))}`}let r=n.map(e=>Number(e.weight)||0),i=Math.max(...r,1),a=Math.min(...r,0),o=i-a||1;return j`${t}<div class="dk-cloud">
+      ${n.slice(0,70).map((e,t)=>j`<span style="font-size:${12+Math.round(24*Math.sqrt(((Number(e.weight)||0)-a)/o))}px;color:${e.tone&&Q[e.tone]?Q[e.tone]:W(e.group==null?t:e.group)}" title=${String(e.weight??``)}>${e.text}</span>`)}
+    </div>`}controls(){let e=this.facets(),t=this.current();return j`<div class="dk-wc-ctl">${e.length>1?j`<span class="dk-tg">
+            ${e.map(e=>j`<button
+                class="dk-tg-b ${e.key===t?.key?`on`:``}"
+                @click=${()=>{this.fkey=e.key}}
+              >
+                ${e.label??e.key}
+              </button>`)}
+          </span>`:``}${j`<span class="dk-tg">
+      ${[`cloud`,`bars`].map(e=>j`<button
+          class="dk-tg-b ${e===this.view?`on`:``}"
+          @click=${()=>{this.view=e}}
+        >
+          ${e}
+        </button>`)}
+    </span>`}</div>`}render(){let e=this.panel,t=this.facets().length>0;return j`<div class="dk-panel dk-full">
+      ${e.title?j`<div class="dk-l">${e.title}</div>`:``}${t?this.controls():``}
+      <div class="dk-wc-body">${t?this.body():j`<div class="dk-muted">no terms available</div>`}</div>
+    </div>`}};X([J({attribute:!1})],$.prototype,`panel`,void 0),X([Y()],$.prototype,`view`,void 0),X([Y()],$.prototype,`fkey`,void 0),$=X([q(`dk-wordcloud`)],$);var Be=e=>j`<div class="dk-panel dk-full dk-sec">${e.title??``}</div>`,Ve=e=>j`
+  <div class="dk-panel dk-stat">
+    <div class="dk-l">${e.label??``}</div>
+    <div class="dk-n">${G(e.value)}${e.sub==null?``:j` <small>${e.sub}</small>`}</div>
+    ${e.spark&&e.spark.length?Me(e.spark,W(e.color??0)):``}
+  </div>`,He=e=>{let t=Number(e.max)||0,n=Number(e.value)||0,r=e.pct==null?t?100*n/t:0:Number(e.pct),i=e.text==null?t?`${G(n)} / ${G(t)} · ${r.toFixed(1)}%`:G(n):e.text,a=`${Math.max(0,Math.min(100,r)).toFixed(1)}%`;return j`
+    <div class="dk-panel dk-full">
+      <div class="dk-l">${e.label??``}</div>
+      <div class="dk-bar"><i style="width:${a}"></i></div>
+      <div class="dk-sub">${i}</div>
+    </div>`},Ue=(e,t)=>e[t]===`right`||e[t]===`num`,We=e=>{let t=e.columns??[],n=e.rows??[],r=e.align??[];return j`
+    <div class="dk-panel dk-full">
+      ${e.title?j`<div class="dk-l">${e.title}</div>`:``}
+      <table class="dk-tbl">
+        <thead>
+          <tr>
+            ${t.map((e,t)=>j`<th class=${Ue(r,t)?`num`:``}>${e}</th>`)}
+          </tr>
+        </thead>
+        <tbody>
+          ${n.map(e=>j`<tr>
+              ${e.map((e,t)=>j`<td class=${Ue(r,t)?`num`:``}>
+                    ${typeof e==`number`?G(e):e}
+                  </td>`)}
+            </tr>`)}
+        </tbody>
+      </table>
+    </div>`},Ge=e=>j`
+  <div class="dk-panel">
+    ${e.title?j`<div class="dk-l" style="margin-bottom:6px">${e.title}</div>`:``}
+    <div class="dk-kv">
+      ${(e.items??[]).map(e=>j`<div class="r">
+            <b>${e.k}</b><span>${typeof e.v==`number`?G(e.v):e.v}</span>
+          </div>`)}
+    </div>
+  </div>`,Ke=e=>{let t=e.text==null?(e.lines??[]).join(`
+`):e.text;return j`
+    <div class="dk-panel dk-full">
+      ${e.title?j`<div class="dk-l">${e.title}</div>`:``}
+      <pre class="dk-log">${t}</pre>
+    </div>`},qe=e=>j`<div class="dk-panel"><span class="dk-pill ${e.tone??``}">${e.text??``}</span></div>`,Je=e=>{let t=String(e.text??``).split(/\n\s*\n/).filter(e=>e.trim());return j`
+    <div class="dk-panel dk-full dk-prose">
+      ${e.title?j`<div class="dk-l">${e.title}</div>`:``}${t.map(e=>j`<p>${e.trim()}</p>`)}
+    </div>`},Ye=e=>j`<div class="dk-panel dk-full">${Oe(e.html??``)}</div>`,Xe=(e,t)=>j`
+  <div class="dk-panel dk-full">
+    ${e.title?j`<div class="dk-l">${e.title}</div>`:``}
+    <div class="dk-acts">
+      ${(e.buttons??[]).map(e=>j`<button
+          class="dk-btn ${e.tone??``}"
+          @click=${()=>t?.(e.action??``,e.payload??{})}
+        >
+          ${e.label??e.action??`action`}
+        </button>`)}
+    </div>
+  </div>`;function Ze(e,t){try{switch(e.type){case`section`:return Be(e);case`stat`:return Ve(e);case`progress`:return He(e);case`chart`:return Le(e);case`table`:return We(e);case`kv`:return Ge(e);case`log`:return Ke(e);case`badge`:return qe(e);case`prose`:return Je(e);case`html`:return Ye(e);case`actions`:return Xe(e,t);case`button`:{let n=e;return Xe({type:`actions`,title:n.title,buttons:[{label:n.label,action:n.action,payload:n.payload,tone:n.tone}]},t)}case`form`:return j`<dk-form .panel=${e} .onAction=${t}></dk-form>`;case`wordcloud`:return j`<dk-wordcloud .panel=${e}></dk-wordcloud>`;default:return j`<div class="dk-panel dk-full">
+          <span class="dk-muted">unknown atom: ${e.type}</span>
+        </div>`}}catch(t){let n=t instanceof Error?t.message:String(t);return j`<div class="dk-panel dk-full dk-err">atom error (${e.type}): ${n}</div>`}}var Qe=`
 .dk-root{--dk-bg:#16140f;--dk-panel:#1f1b15;--dk-fg:#ece6d8;--dk-muted:#9a9384;--dk-line:#352f25;
   --dk-accent:#d98a4f;--dk-accent2:#cda94e;--dk-ok:#6fa8a0;--dk-warn:#cda94e;--dk-err:#d4707a;
   --dk-c1:#d98a4f;--dk-c2:#6fa8a0;--dk-c3:#cda94e;--dk-c4:#a98bd0;--dk-c5:#d4707a;--dk-c6:#7f9bd1;
@@ -61,322 +160,20 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
 .dk-cval{fill:var(--dk-fg);font-size:11px;font-family:ui-monospace,monospace}
 .dk-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--dk-muted);margin-top:4px}
 .dk-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.dk-acts{display:flex;flex-wrap:wrap;gap:6px}
+.dk-btn{cursor:pointer;border:1px solid var(--dk-line);background:var(--dk-panel);color:var(--dk-fg);border-radius:6px;padding:5px 12px;font:inherit}
+.dk-btn:hover{border-color:var(--dk-accent);color:var(--dk-accent)} .dk-btn[disabled]{opacity:.4;cursor:not-allowed}
 .dk-wc-ctl{display:flex;gap:10px;margin:4px 0 10px;flex-wrap:wrap}
 .dk-tg{display:inline-flex;border:1px solid var(--dk-line);border-radius:6px;overflow:hidden}
 .dk-tg-b{border:0;border-right:1px solid var(--dk-line);background:var(--dk-panel);color:var(--dk-muted);font:inherit;font-size:12px;padding:3px 10px;cursor:pointer}
 .dk-tg-b:last-child{border-right:0} .dk-tg-b.on{color:var(--dk-accent);background:var(--dk-bg)} .dk-tg-b:hover{color:var(--dk-fg)}
 .dk-cloud{display:flex;flex-wrap:wrap;gap:4px 13px;align-items:baseline;padding:8px 2px;line-height:1.25}
 .dk-cloud span{white-space:nowrap}
-.dk-acts{display:flex;flex-wrap:wrap;gap:6px}
-.dk-btn{cursor:pointer;border:1px solid var(--dk-line);background:var(--dk-panel);color:var(--dk-fg);border-radius:6px;padding:5px 12px;font:inherit}
-.dk-btn:hover{border-color:var(--dk-accent);color:var(--dk-accent)} .dk-btn[disabled]{opacity:.4;cursor:not-allowed}
 .dk-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:6px 0 10px}
 .dk-f{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0} .dk-f.dk-full{grid-column:1/-1}
 .dk-fl{color:var(--dk-muted);font-size:11px}
 .dk-f input,.dk-f select,.dk-f textarea{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius:6px;color:var(--dk-fg);font:inherit;font-size:13px;padding:6px 8px;width:100%}
-.dk-f textarea{min-height:84px;resize:vertical} .dk-fcheck{flex-direction:row;align-items:center;gap:7px}`;
-
-  function injectCSS() {
-    if (document.getElementById('dk-css')) return;
-    const s = document.createElement('style');
-    s.id = 'dk-css'; s.textContent = CSS;
-    (document.head || document.documentElement).appendChild(s);
-  }
-
-  // ───────────────────────── helpers ─────────────────────────
-  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const COLORS = ['var(--dk-c1)', 'var(--dk-c2)', 'var(--dk-c3)', 'var(--dk-c4)', 'var(--dk-c5)', 'var(--dk-c6)'];
-  const color = i => COLORS[(((+i || 0) % 6) + 6) % 6];
-  function fmt(v) {
-    if (v == null) return '–';
-    if (typeof v === 'number') {
-      if (!isFinite(v)) return '–';
-      if (Number.isInteger(v)) return v.toLocaleString();
-      return Math.abs(v) >= 1000 ? v.toLocaleString(undefined, { maximumFractionDigits: 1 }) : v.toFixed(2);
-    }
-    return String(v);
-  }
-  function fmtAxis(v) {
-    v = +v || 0; const a = Math.abs(v);
-    if (a >= 1e9) return (v / 1e9).toFixed(1) + 'B';
-    if (a >= 1e6) return (v / 1e6).toFixed(1) + 'M';
-    if (a >= 1e3) return (v / 1e3).toFixed(1) + 'k';
-    return Number.isInteger(v) ? String(v) : v.toFixed(2);
-  }
-  function fmtX(v) { if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10); return String(v); }
-  function trunc(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
-
-  // ───────────────────────── charts (hand-rolled SVG) ─────────────────────────
-  function spark(vals, col) {
-    const W = 240, H = 46, p = 4, n = vals.length;
-    const good = vals.filter(v => v != null && isFinite(v));
-    if (good.length < 2) return `<svg viewBox="0 0 ${W} ${H}"></svg>`;
-    const lo = Math.min(...good), hi = Math.max(...good), span = (hi - lo) || 1;
-    const X = i => p + (i / (n - 1)) * (W - 2 * p), Y = v => H - p - ((v - lo) / span) * (H - 2 * p);
-    let d = '', started = false;
-    vals.forEach((v, i) => { if (v == null || !isFinite(v)) { started = false; return; } d += (started ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(v).toFixed(1) + ' '; started = true; });
-    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="${col}" stroke-width="1.6"/></svg>`;
-  }
-
-  function svgXY(kind, xlabels, series, markers) {
-    const W = 820, H = 340, m = { l: 60, r: 14, t: 22, b: 72 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
-    const n = xlabels.length, multi = series.length > 1;
-    let max = 0;
-    if (kind === 'stacked') { for (let i = 0; i < n; i++) { let s = 0; series.forEach(se => s += Math.max(0, +se.values[i] || 0)); max = Math.max(max, s); } }
-    else series.forEach(se => se.values.forEach(v => max = Math.max(max, +v || 0)));
-    max = max || 1;
-    const ny = v => m.t + ih - (v / max) * ih, band = iw / Math.max(1, n), bx = i => m.l + band * i + band / 2;
-    let g = '';
-    for (let t = 0; t <= 4; t++) { const v = max * t / 4, y = ny(v); g += `<line class="dk-grid" x1="${m.l}" y1="${y}" x2="${m.l + iw}" y2="${y}"/><text class="dk-tick" x="${m.l - 8}" y="${y + 4}" text-anchor="end">${fmtAxis(v)}</text>`; }
-    const step = n > 18 ? Math.ceil(n / 18) : 1;
-    for (let i = 0; i < n; i++) { if (i % step) continue; const x = bx(i), yy = m.t + ih + 15; g += `<text class="dk-tick" x="${x}" y="${yy}" text-anchor="end" transform="rotate(-35 ${x} ${yy})">${esc(trunc(fmtX(xlabels[i]), 18))}</text>`; }
-    if (kind === 'bar' || kind === 'stacked') {
-      const ns = series.length;
-      if (kind === 'stacked') {
-        for (let i = 0; i < n; i++) { let acc = 0; series.forEach((se, si) => { const v = Math.max(0, +se.values[i] || 0), y0 = ny(acc), y1 = ny(acc + v); acc += v; const bw = band * 0.7, x = bx(i) - bw / 2; g += `<rect x="${x}" y="${y1}" width="${bw}" height="${Math.max(0, y0 - y1)}" fill="${color(si)}"/>`; }); }
-      } else { const gw = band * 0.72, sw = multi ? gw / ns : gw; for (let i = 0; i < n; i++) series.forEach((se, si) => { const v = Math.max(0, +se.values[i] || 0), y = ny(v), x = multi ? bx(i) - gw / 2 + si * sw : bx(i) - gw / 2; g += `<rect x="${x}" y="${y}" width="${Math.max(1, sw - (multi ? 1.5 : 0))}" height="${Math.max(0, (m.t + ih) - y)}" fill="${color(multi ? si : 0)}"/>`; }); }
-    } else { // line / area
-      series.forEach((se, si) => { const pts = se.values.map((v, i) => `${bx(i)},${ny(Math.max(0, +v || 0))}`).join(' '); if (kind === 'area' && !multi) g += `<polygon points="${bx(0)},${m.t + ih} ${pts} ${bx(n - 1)},${m.t + ih}" fill="${color(0)}" opacity=".18"/>`; g += `<polyline points="${pts}" fill="none" stroke="${color(si)}" stroke-width="2"/>`; se.values.forEach((v, i) => g += `<circle cx="${bx(i)}" cy="${ny(Math.max(0, +v || 0))}" r="2.6" fill="${color(si)}"/>`); });
-    }
-    g += `<line class="dk-axis" x1="${m.l}" y1="${m.t + ih}" x2="${m.l + iw}" y2="${m.t + ih}"/><line class="dk-axis" x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${m.t + ih}"/>`;
-    (markers || []).forEach(mk => {           // turning-point / ending annotations on the time axis
-      const idx = xlabels.indexOf(mk.x); if (idx < 0) return;
-      const x = bx(idx), col = mk.tone === 'accent' ? 'var(--dk-accent)' : mk.tone === 'err' ? 'var(--dk-err)' : mk.tone === 'ok' ? 'var(--dk-ok)' : 'var(--dk-muted)';
-      g += `<line x1="${x}" y1="${m.t}" x2="${x}" y2="${m.t + ih}" stroke="${col}" stroke-width="1" stroke-dasharray="3 3" opacity=".85"/>`;
-      if (mk.label) g += `<text x="${x}" y="${m.t - 6}" text-anchor="middle" class="dk-tick" fill="${col}">${esc(mk.label)}</text>`;
-    });
-    const legend = multi ? '<div class="dk-legend">' + series.map((se, si) => `<span><i style="background:${color(si)}"></i>${esc(se.name)}</span>`).join('') + '</div>' : '';
-    return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>${legend}`;
-  }
-
-  function svgDiverging(labels, values, leftLabel, rightLabel) {
-    const rowH = 30, m = { l: 140, r: 70, t: 8, b: 20 }, W = 820, n = labels.length;
-    const H = m.t + m.b + n * rowH, iw = W - m.l - m.r, cx = m.l + iw / 2, half = iw / 2;
-    let g = `<line class="dk-axis" x1="${cx}" y1="${m.t}" x2="${cx}" y2="${m.t + n * rowH}"/>`;
-    values.forEach((raw, i) => {
-      const v = Math.max(-1, Math.min(1, +raw || 0)), y = m.t + i * rowH, w = Math.abs(v) * half;
-      const x = v >= 0 ? cx : cx - w, col = v >= 0 ? 'var(--dk-c1)' : 'var(--dk-c2)';
-      g += `<text class="dk-tick" x="${m.l - 10}" y="${y + rowH / 2 + 4}" text-anchor="end">${esc(trunc(labels[i], 20))}</text>`;
-      g += `<rect x="${x}" y="${y + 5}" width="${Math.max(1, w)}" height="${rowH - 12}" rx="2" fill="${col}"/>`;
-      g += `<text class="dk-cval" x="${v >= 0 ? cx + w + 6 : cx - w - 6}" y="${y + rowH / 2 + 4}" text-anchor="${v >= 0 ? 'start' : 'end'}">${v > 0 ? '+' : ''}${v.toFixed(2)}</text>`;
-    });
-    g += `<text class="dk-tick" x="${m.l}" y="${m.t + n * rowH + 14}" text-anchor="start">← ${esc(leftLabel || 'them')}</text>`;
-    g += `<text class="dk-tick" x="${m.l + iw}" y="${m.t + n * rowH + 14}" text-anchor="end">${esc(rightLabel || 'you')} →</text>`;
-    return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
-  }
-
-  function svgHBar(labels, values) {
-    const rowH = 22, m = { l: 210, r: 64, t: 6, b: 6 }, W = 820, n = labels.length, H = m.t + m.b + n * rowH, iw = W - m.l - m.r;
-    const max = Math.max(...values.map(v => +v || 0), 0) || 1; let g = '';
-    values.forEach((v, i) => { const y = m.t + i * rowH, w = Math.max(0, (+v || 0) / max * iw); g += `<text class="dk-tick" x="${m.l - 8}" y="${y + rowH / 2 + 4}" text-anchor="end">${esc(trunc(fmtX(labels[i]), 30))}</text><rect x="${m.l}" y="${y + 3}" width="${w}" height="${rowH - 6}" fill="${color(0)}"/><text class="dk-cval" x="${m.l + w + 6}" y="${y + rowH / 2 + 4}">${fmtAxis(v)}</text>`; });
-    return `<svg viewBox="0 0 ${W} ${H}">${g}</svg>`;
-  }
-
-  // ───────────────────────── wordcloud (interactive: facet + cloud/bars, all client-side) ──
-  const wcState = {};   // id → {facets, view, fkey}; persists across poll re-renders (no server mutation)
-  const TONE = { warm: 'var(--dk-accent)', cool: 'var(--dk-c6)', you: 'var(--dk-c1)', them: 'var(--dk-c2)', ok: 'var(--dk-ok)', err: 'var(--dk-err)' };
-
-  function wcBody(st) {
-    const f = (st.facets || []).find(x => x.key === st.fkey) || (st.facets || [])[0];
-    if (!f || !f.terms || !f.terms.length) return '<div class="dk-muted">no terms for this lens</div>';
-    const lg = (f.legend && f.legend.length) ? '<div class="dk-legend">' + f.legend.map(l => `<span><i style="background:${TONE[l.tone] || color(0)}"></i>${esc(l.label)}</span>`).join('') + '</div>' : '';
-    const terms = f.terms.slice().sort((a, b) => (+b.weight || 0) - (+a.weight || 0));
-    if (st.view === 'bars') {
-      const top = terms.slice(0, 22);
-      return lg + svgHBar(top.map(t => t.text), top.map(t => +t.weight || 0));
-    }
-    const ws = terms.map(t => +t.weight || 0), max = Math.max(...ws, 1), min = Math.min(...ws, 0), span = (max - min) || 1;
-    return lg + '<div class="dk-cloud">' + terms.slice(0, 70).map((t, i) => {
-      const sz = 12 + Math.round(24 * Math.sqrt(((+t.weight || 0) - min) / span));
-      const col = (t.tone && TONE[t.tone]) ? TONE[t.tone] : color(t.group != null ? t.group : i);
-      return `<span style="font-size:${sz}px;color:${col}" title="${esc(t.weight)}">${esc(t.text)}</span>`;
-    }).join(' ') + '</div>';
-  }
-  function wcControls(id, st) {
-    const facets = st.facets || [];
-    const fb = facets.length > 1 ? '<span class="dk-tg">' + facets.map(f => `<button class="dk-tg-b${f.key === st.fkey ? ' on' : ''}" onclick="dashkit._wc('${esc(id)}','fkey','${esc(f.key)}')">${esc(f.label || f.key)}</button>`).join('') + '</span>' : '';
-    const vb = '<span class="dk-tg">' + ['cloud', 'bars'].map(v => `<button class="dk-tg-b${v === st.view ? ' on' : ''}" onclick="dashkit._wc('${esc(id)}','view','${v}')">${v}</button>`).join('') + '</span>';
-    return `<div class="dk-wc-ctl">${fb}${vb}</div>`;
-  }
-  function wordcloudPanel(p) {
-    const id = p.id || ('wc-' + String(p.title || 'words').replace(/\W+/g, '-'));
-    const facets = (p.facets || []).filter(f => f && f.terms && f.terms.length);
-    const st = wcState[id] || (wcState[id] = {});
-    st.facets = facets;
-    if (!st.view) st.view = 'cloud';
-    if (!st.fkey || !facets.some(f => f.key === st.fkey)) st.fkey = facets[0] ? facets[0].key : null;
-    const body = facets.length ? wcBody(st) : '<div class="dk-muted">no terms available</div>';
-    return `<div class="dk-panel dk-full" data-wcid="${esc(id)}">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}${facets.length ? wcControls(id, st) : ''}<div class="dk-wc-body">${body}</div></div>`;
-  }
-  function _wc(id, k, v) {                 // control handler — re-renders just this atom's subtree
-    const st = wcState[id]; if (!st) return;
-    st[k] = v;
-    let root; try { root = document.querySelector(`[data-wcid="${CSS.escape(id)}"]`); } catch (e) { return; }
-    if (!root) return;
-    const body = root.querySelector('.dk-wc-body'); if (body) body.innerHTML = wcBody(st);
-    const ctl = root.querySelector('.dk-wc-ctl'); if (ctl) ctl.outerHTML = wcControls(id, st);
-  }
-
-  // ───────────────────────── atoms ─────────────────────────
-  function statPanel(p) {
-    const sp = (p.spark && p.spark.length) ? spark(p.spark, color(p.color != null ? p.color : 0)) : '';
-    const sub = p.sub != null ? ` <small>${esc(p.sub)}</small>` : '';
-    return `<div class="dk-panel dk-stat"><div class="dk-l">${esc(p.label || '')}</div><div class="dk-n">${esc(fmt(p.value))}${sub}</div>${sp}</div>`;
-  }
-  function progressPanel(p) {
-    const max = +p.max || 0, val = +p.value || 0;
-    const pct = p.pct != null ? +p.pct : (max ? 100 * val / max : 0);
-    const text = p.text != null ? p.text : (max ? `${fmt(val)} / ${fmt(max)} · ${pct.toFixed(1)}%` : fmt(val));
-    return `<div class="dk-panel dk-full"><div class="dk-l">${esc(p.label || '')}</div><div class="dk-bar"><i style="width:${Math.max(0, Math.min(100, pct)).toFixed(1)}%"></i></div><div class="dk-sub">${esc(text)}</div></div>`;
-  }
-  function chartPanel(p) {
-    const kind = p.kind || 'line';
-    let series = p.series || (p.values ? [{ name: p.label || '', values: p.values }] : []);
-    if (!Array.isArray(series)) series = [];
-    const x = p.x || (series[0] ? series[0].values.map((_, i) => i) : []);
-    const mk = p.markers;
-    let svg;
-    if (kind === 'spark') svg = spark((series[0] || {}).values || [], color(p.color != null ? p.color : 0));
-    else if (kind === 'diverging') svg = svgDiverging(x, (series[0] || {}).values || [], p.left, p.right);
-    else if (kind === 'hbar') svg = svgHBar(x, (series[0] || {}).values || []);
-    else if (kind === 'bars') svg = svgXY('bar', x, series, mk);
-    else if (kind === 'stacked') svg = svgXY('stacked', x, series, mk);
-    else if (kind === 'area') svg = svgXY('area', x, series, mk);
-    else svg = svgXY('line', x, series, mk);
-    const tile = (kind === 'spark');                 // sparks are small tiles; real charts span the row
-    return `<div class="dk-panel dk-chart${tile ? '' : ' dk-full'}">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}${svg}</div>`;
-  }
-  function tablePanel(p) {
-    const cols = p.columns || [], rows = p.rows || [], al = p.align || [];
-    const num = i => al[i] === 'right' || al[i] === 'num';
-    return `<div class="dk-panel dk-full">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}<table class="dk-tbl"><thead><tr>${cols.map((c, i) => `<th class="${num(i) ? 'num' : ''}">${esc(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((v, i) => `<td class="${num(i) ? 'num' : ''}">${esc(typeof v === 'number' ? fmt(v) : v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-  }
-  function kvPanel(p) {
-    const items = p.items || [];
-    return `<div class="dk-panel">${p.title ? `<div class="dk-l" style="margin-bottom:6px">${esc(p.title)}</div>` : ''}<div class="dk-kv">${items.map(it => `<div class="r"><b>${esc(it.k)}</b><span>${esc(typeof it.v === 'number' ? fmt(it.v) : it.v)}</span></div>`).join('')}</div></div>`;
-  }
-  function logPanel(p) {
-    const text = p.text != null ? p.text : (p.lines || []).join('\n');
-    return `<div class="dk-panel dk-full">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}<pre class="dk-log">${esc(text)}</pre></div>`;
-  }
-  // interact-down: a button carries {action,payload}; _fire routes it to the host's
-  // handler (dod's proxy in the deck pane, or the dashboard's own /api/action standalone).
-  function actionsPanel(p) {
-    const btns = (p.buttons || []).map(b =>
-      `<button class="dk-btn ${esc(b.tone || '')}" onclick="dashkit._fire(this)" data-action="${esc(b.action || '')}" data-payload='${esc(JSON.stringify(b.payload || {}))}'>${esc(b.label || b.action || 'action')}</button>`).join('');
-    return `<div class="dk-panel dk-full">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}<div class="dk-acts">${btns}</div></div>`;
-  }
-  // input atoms: a form whose fields edit values and submit them as one action. The render
-  // poll is suspended while a field is focused/dirty (see _busy) so typing isn't clobbered.
-  function fieldHtml(fid, f) {
-    const nm = `data-form="${esc(fid)}" data-key="${esc(f.key)}"`;
-    const on = `oninput="dashkit._dirty('${esc(fid)}')" onchange="dashkit._dirty('${esc(fid)}')"`;
-    const lab = `<span class="dk-fl">${esc(f.label || f.key)}</span>`;
-    const v = f.value == null ? '' : f.value;
-    if (f.kind === 'textarea') return `<label class="dk-f dk-full">${lab}<textarea ${nm} ${on}>${esc(v)}</textarea></label>`;
-    if (f.kind === 'select') return `<label class="dk-f">${lab}<select ${nm} ${on}>${(f.options || []).map(o => `<option value="${esc(o.value)}"${String(o.value) === String(f.value) ? ' selected' : ''}>${esc(o.label || o.value)}</option>`).join('')}</select></label>`;
-    if (f.kind === 'checkbox') return `<label class="dk-f dk-fcheck"><input type="checkbox" ${nm} ${on}${f.value ? ' checked' : ''}>${lab}</label>`;
-    return `<label class="dk-f">${lab}<input type="${f.kind === 'number' ? 'number' : 'text'}" ${nm} value="${esc(v)}" ${on}></label>`;
-  }
-  function formPanel(p) {
-    const fid = p.id || ('form-' + (p.action || 'x'));
-    const fields = (p.fields || []).map(f => fieldHtml(fid, f)).join('');
-    return `<div class="dk-panel dk-full" data-formroot="${esc(fid)}" data-action="${esc(p.action || 'save')}" data-context='${esc(JSON.stringify(p.context || {}))}'>${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}<div class="dk-form">${fields}</div><div class="dk-acts"><button class="dk-btn" onclick="dashkit._submit('${esc(fid)}')">${esc(p.submitLabel || 'Save')}</button>${p.cancelAction ? `<button class="dk-btn" onclick="dashkit._cancel('${esc(fid)}','${esc(p.cancelAction)}')">Cancel</button>` : ''}</div></div>`;
-  }
-  function panel(p) {
-    try {
-      switch (p && p.type) {
-        case 'section': return `<div class="dk-panel dk-full dk-sec">${esc(p.title || '')}</div>`;
-        case 'stat': return statPanel(p);
-        case 'progress': return progressPanel(p);
-        case 'chart': return chartPanel(p);
-        case 'wordcloud': return wordcloudPanel(p);
-        case 'table': return tablePanel(p);
-        case 'kv': return kvPanel(p);
-        case 'log': return logPanel(p);
-        case 'badge': return `<div class="dk-panel"><span class="dk-pill ${esc(p.tone || '')}">${esc(p.text || '')}</span></div>`;
-        case 'button': return actionsPanel({ buttons: [p], title: p.title });
-        case 'actions': return actionsPanel(p);
-        case 'form': return formPanel(p);
-        case 'prose': return `<div class="dk-panel dk-full dk-prose">${p.title ? `<div class="dk-l">${esc(p.title)}</div>` : ''}${String(p.text || '').split(/\n\s*\n/).filter(s => s.trim()).map(s => `<p>${esc(s.trim())}</p>`).join('')}</div>`;
-        case 'html': return `<div class="dk-panel dk-full">${p.html || ''}</div>`;   // first-party escape hatch (NOT escaped)
-        default: return `<div class="dk-panel dk-full"><span class="dk-muted">unknown atom: ${esc(p && p.type)}</span></div>`;
-      }
-    } catch (e) { return `<div class="dk-panel dk-full dk-err">atom error (${esc(p && p.type)}): ${esc(e.message)}</div>`; }
-  }
-
-  // ───────────────────────── render + poll ─────────────────────────
-  function renderSpec(spec, el) {
-    injectCSS();
-    el.classList.add('dk-root');
-    const panels = (spec && spec.panels) || [];
-    el.innerHTML = `${spec && spec.title ? `<div class="dk-title">${esc(spec.title)}</div>` : ''}<div class="dk-panels">${panels.map(panel).join('')}</div>`;
-  }
-
-  // The active action handler: onAction(action,payload) in dod's pane, or a POST to
-  // actionUrl for a standalone dashboard. Null → buttons no-op.
-  let _action = null;
-  function _fire(elm) {
-    if (!_action) return;
-    let payload = {};
-    try { payload = JSON.parse(elm.getAttribute('data-payload') || '{}'); } catch (e) {}
-    _action(elm.getAttribute('data-action') || '', payload);
-  }
-
-  // ── form input atoms: dirty-tracking + submit + no-clobber ──
-  const _dirtyForms = new Set();
-  const cssEsc = (s) => (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/["\\]/g, '\\$&');
-  function _dirty(fid) { _dirtyForms.add(fid); }
-  function _busy(el) {                          // true while the user is mid-edit → skip the poll
-    const a = document.activeElement;
-    if (a && el.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
-    return _dirtyForms.size > 0;
-  }
-  function _submit(fid) {
-    const root = document.querySelector(`[data-formroot="${cssEsc(fid)}"]`);
-    if (!root || !_action) return;
-    const values = {};
-    root.querySelectorAll(`[data-form="${cssEsc(fid)}"]`).forEach((inp) => {
-      const k = inp.getAttribute('data-key');
-      values[k] = inp.type === 'checkbox' ? inp.checked
-        : inp.type === 'number' ? (inp.value === '' ? null : Number(inp.value))
-          : inp.value;
-    });
-    let ctx = {};
-    try { ctx = JSON.parse(root.getAttribute('data-context') || '{}'); } catch (e) {}
-    Promise.resolve(_action(root.getAttribute('data-action') || 'save', { ...ctx, values }))
-      .finally(() => _dirtyForms.delete(fid));   // clear dirty → poll resumes & shows the saved value
-  }
-  function _cancel(fid, action) {
-    _dirtyForms.delete(fid);
-    if (_action) _action(action || 'cancel', {});
-  }
-
-  function mount(opts) {
-    injectCSS();
-    _action = opts.onAction
-      || (opts.actionUrl ? (a, p) => fetch(opts.actionUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: a, payload: p }) }).catch(() => {})
-        : null);
-    const el = (typeof opts.mount === 'string' ? document.querySelector(opts.mount) : opts.mount) || document.body;
-    let stopped = false, timer = null;
-    const reschedule = (ms) => { timer = setTimeout(tick, ms); };
-    async function tick() {
-      if (stopped) return;
-      if (_busy(el)) return reschedule(opts.refreshMs || 3000);   // mid-edit → don't clobber inputs
-      try {
-        const spec = await (await fetch(opts.renderUrl, { cache: 'no-store' })).json();
-        if (stopped) return;
-        if (_busy(el)) return reschedule(opts.refreshMs || spec.refresh_ms || 3000);
-        renderSpec(spec, el);
-        timer = setTimeout(tick, opts.refreshMs || spec.refresh_ms || 3000);
-      } catch (e) {
-        if (!el.firstChild) { injectCSS(); el.classList.add('dk-root'); el.innerHTML = `<div class="dk-panel dk-full dk-err">dashkit: cannot reach ${esc(opts.renderUrl)}</div>`; }
-        timer = setTimeout(tick, opts.refreshMs || 3000);
-      }
-    }
-    tick();
-    return { stop() { stopped = true; if (timer) clearTimeout(timer); } };
-  }
-
-  window.dashkit = { mount, renderSpec, version: '1', _wc, _fire, _dirty, _submit, _cancel };
-})();
+.dk-f textarea{min-height:84px;resize:vertical} .dk-fcheck{flex-direction:row;align-items:center;gap:7px}`;function $e(){if(typeof document>`u`||document.getElementById(`dk-css`))return;let e=document.createElement(`style`);e.id=`dk-css`,e.textContent=Qe,(document.head??document.documentElement).appendChild(e)}var et=`1`;function tt(e,t,n){$e(),t.classList.add(`dk-root`);let r=e.panels??[];B(j`
+      ${e.title?j`<div class="dk-title">${e.title}</div>`:``}
+      <div class="dk-panels">${r.map(e=>Ze(e,n))}</div>
+    `,t)}function nt(e){let t=(typeof e.mount==`string`?document.querySelector(e.mount):e.mount)??document.body,{actionUrl:n}=e,r=e.onAction??(n?(e,t)=>{fetch(n,{method:`POST`,headers:{"Content-Type":`application/json`},body:JSON.stringify({action:e,payload:t})}).catch(()=>{})}:void 0),i=!1,a,o=async()=>{if(!i){try{let n=await(await fetch(e.renderUrl,{cache:`no-store`})).json();if(i)return;tt(n,t,r)}catch{}a=setTimeout(()=>void o(),e.refreshMs??3e3)}};return o(),{stop:()=>{i=!0,a&&clearTimeout(a)}}}return e.mount=nt,e.renderSpec=tt,e.version=et,e})({});

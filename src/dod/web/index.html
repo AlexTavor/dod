@@ -1,17 +1,12 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>dod</title>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dod</title>
 <link rel="stylesheet" href="/app.css">
-<script src="/dashkit.js"></script>
 </head>
-<body><div id="app">
-  <header>
-    <b>dod</b><span class="tagline">project control</span>
-    <span class="spacer"></span>
-    <span id="count" class="count"></span>
-  </header>
-  <aside id="list"></aside>
-  <main id="detail"></main>
-</div>
-<script>const TOKEN="__TOKEN__";</script>
+<body>
+<!-- app.js boots the admin UI: it reads window.TOKEN and appends <dod-app> to the body.
+     dashkit is bundled into app.js; the standalone /dashkit.js is for kit projects + the shim. -->
+<script>window.TOKEN="__TOKEN__";</script>
 <script src="/app.js"></script>
 </body></html>
