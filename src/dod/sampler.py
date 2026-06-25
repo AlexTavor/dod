@@ -6,6 +6,7 @@ probed concurrently in a thread pool, so a single hung dashboard can't freeze th
 """
 from __future__ import annotations
 
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
@@ -13,6 +14,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .app import App
     from .models import State
+
+logger = logging.getLogger(__name__)
 
 INTERVAL_S = 2.0
 MAX_WORKERS = 16
@@ -34,6 +37,6 @@ def run_sampler(app: App, stop_event: threading.Event) -> None:
             with app.lock:
                 app.states = snap
             app.discovery.prune_dead()
-        except Exception as ex:  # noqa: BLE001
-            print(f"dod: sampler error: {ex}")
+        except Exception:  # one bad tick must not kill the loop (logged, not swallowed)
+            logger.exception("sampler error")
         stop_event.wait(INTERVAL_S)

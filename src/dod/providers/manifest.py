@@ -21,6 +21,7 @@ Config at ``$DOD_HOME/providers/manifest.json``: {enabled, roots, max_depth}.
 """
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -29,6 +30,8 @@ from typing import Any, cast
 from ..config import Paths
 from ..models import Entry
 from ..util import load_json
+
+logger = logging.getLogger(__name__)
 
 MANIFEST = "dod.project.json"
 PRUNE = {"node_modules", ".git", ".venv", "venv", "dist", "build", ".vite",
@@ -67,7 +70,7 @@ def manifest_to_entry(mpath: Path) -> Entry | None:
     data = load_json(mpath)
     if not data.get("id") or not data.get("name"):
         if data:
-            print(f"dod: manifest {mpath} missing id/name — skipped")
+            logger.warning("manifest %s missing id/name — skipped", mpath)
         return None
     run = data.get("run") or {}
     cmd = run.get("cmd") or []
