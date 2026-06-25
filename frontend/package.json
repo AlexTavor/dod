@@ -6,7 +6,8 @@
   "description": "dod's web UI (Lit + TypeScript). Built dev-time; the bundle is committed into ../src/dod/web and served statically by the stdlib-only Python daemon.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && BUILD_TARGET=app vite build",
+    "build:web": "npm run build && cp dist/dashkit.js dist/app.js ../src/dod/web/",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

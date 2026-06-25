@@ -2,7 +2,7 @@
   --accent:#d98a4f; --ok:#6fa8a0; --warn:#cda94e; --err:#d4707a; --hover:#262017; --active:#2c251a; }
 *{box-sizing:border-box} html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.45 -apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
-#app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:46px 1fr;height:100vh}
+dod-app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:46px 1fr;height:100vh}
 
 header{grid-column:1/3;display:flex;align-items:center;gap:9px;padding:0 14px;border-bottom:1px solid var(--line)}
 header b{font-weight:600;letter-spacing:.05em;font-size:14px}
@@ -11,7 +11,7 @@ header b{font-weight:600;letter-spacing:.05em;font-size:14px}
 .count{color:var(--muted);font-size:11px;font-family:ui-monospace,monospace}
 
 /* ── the project list (left) ── */
-#list{border-right:1px solid var(--line);overflow:auto;padding:8px}
+dod-list{display:block;border-right:1px solid var(--line);overflow:auto;padding:8px}
 .item{display:grid;grid-template-columns:1fr auto;gap:4px 8px;padding:10px 11px;border:1px solid transparent;border-radius:9px;cursor:pointer;margin-bottom:4px}
 .item:hover{background:var(--hover)} .item.sel{background:var(--active);border-color:var(--line)}
 .item:active{cursor:grabbing} .item[draggable=true]{cursor:grab}
@@ -31,7 +31,7 @@ header b{font-weight:600;letter-spacing:.05em;font-size:14px}
 .btn.stop:hover{border-color:var(--err);color:var(--err)}
 
 /* ── detail (right) ── */
-#detail{position:relative;overflow:hidden;display:flex;flex-direction:column}
+dod-detail{position:relative;overflow:hidden;display:flex;flex-direction:column}
 .dhead{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line)}
 .dhead h2{font-size:15px;margin:0;font-weight:600} .dhead .why{color:var(--muted);font-size:12px}
 .dhead .acts{margin-left:auto;display:flex;gap:7px}
