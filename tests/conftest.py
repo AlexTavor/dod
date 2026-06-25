@@ -1,3 +1,4 @@
+import logging
 import os
 
 import pytest
@@ -5,6 +6,26 @@ import pytest
 from dod.config import Paths
 from dod.registry import Registry
 from dod.supervisor import Supervisor
+
+
+@pytest.fixture(autouse=True)
+def _reset_dod_logger():
+    """Keep the process-global ``dod`` logger pristine between tests.
+
+    ``configure_logging`` mutates a shared logger (handlers, level, propagate).
+    Snapshot and restore it around every test so one test that configures logging
+    cannot leak an open file handler — or a ``propagate=False`` that would starve
+    ``caplog`` — into the next.
+    """
+    log = logging.getLogger("dod")
+    saved_handlers, saved_level, saved_propagate = log.handlers[:], log.level, log.propagate
+    yield
+    for h in log.handlers:
+        if h not in saved_handlers:
+            h.close()
+    log.handlers[:] = saved_handlers
+    log.setLevel(saved_level)
+    log.propagate = saved_propagate
 
 
 @pytest.fixture

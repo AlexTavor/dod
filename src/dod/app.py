@@ -4,6 +4,7 @@ boot/shutdown sequence. Holds the live state snapshot the HTTP layer serves.
 from __future__ import annotations
 
 import atexit
+import logging
 import os
 import secrets
 import signal
@@ -14,6 +15,7 @@ from http.server import ThreadingHTTPServer
 
 from .config import HOST, Paths
 from .discovery import Discovery
+from .logsetup import configure_logging
 from .models import State
 from .providers.base import Provider
 from .providers.manifest import ManifestProvider
@@ -22,6 +24,8 @@ from .registry import Registry
 from .sampler import run_sampler
 from .supervisor import Supervisor
 from .util import load_json, write_json
+
+logger = logging.getLogger(__name__)
 
 
 def default_providers(paths: Paths) -> list[Provider]:
@@ -80,6 +84,7 @@ class App:
 
     def serve(self, port: int) -> int:
         from .server import make_handler  # late import to avoid cycle
+        configure_logging(self.paths)              # daemon owns logging; CLI paths keep printing
         self._serving = True
         atexit.register(self.shutdown)
         self.supervisor.reap_on_boot()             # re-adopt survivors / record deaths
@@ -91,6 +96,7 @@ class App:
             os._exit(0)
         signal.signal(signal.SIGTERM, _on_sigterm)
         n = len(self.registry.load())
+        logger.info("serving on http://%s:%s (%d dashboards registered)", HOST, port, n)
         if not self.paths.registry.exists():
             print(f"dod: note no durable registry at {self.paths.registry} (run `dod init` to seed one)")
         print(f"dod → http://{HOST}:{port}   ({n} dashboards registered)")

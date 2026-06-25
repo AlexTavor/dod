@@ -10,6 +10,7 @@ never corrupt your hand-curated catalog, only the transient ``local.json``.
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -20,31 +21,33 @@ from .util import load_json, write_json
 if TYPE_CHECKING:
     from .providers.base import Provider
 
+logger = logging.getLogger(__name__)
+
 VALID_KEYS = ("id", "name", "blurb", "why", "tags", "type", "cmd", "cwd", "env",
               "port", "ready", "ready_timeout_s", "stop", "singleton", "source",
               "provider", "_comment")
 
 
 def validate(e: dict[str, Any], source: str) -> Entry | None:
-    """Coerce + default one raw entry; return None (with a printed reason) if unusable."""
+    """Coerce + default one raw entry; return None (with a logged reason) if unusable."""
     if not isinstance(e, dict) or not ID_RE.match(str(e.get("id", ""))):
-        print(f"dod: skip entry with bad/missing id in {source}: {e.get('id')!r}")
+        logger.warning("skip entry with bad/missing id in %s: %r", source, e.get("id"))
         return None
     if e.get("type") not in ("web", "web-external", "terminal"):
-        print(f"dod: skip {e['id']}: bad type {e.get('type')!r}")
+        logger.warning("skip %s: bad type %r", e["id"], e.get("type"))
         return None
     if not isinstance(e.get("cmd"), list):
-        print(f"dod: skip {e['id']}: cmd must be an argv list, not a shell string")
+        logger.warning("skip %s: cmd must be an argv list, not a shell string", e["id"])
         return None
     if e.get("port") is not None:
         try:
             e["port"] = int(e["port"])
         except (TypeError, ValueError):
-            print(f"dod: skip {e['id']}: bad port {e.get('port')!r}")
+            logger.warning("skip %s: bad port %r", e["id"], e.get("port"))
             return None
     for k in list(e):
         if k not in VALID_KEYS:
-            print(f"dod: note {e['id']}: ignoring unknown key {k!r}")
+            logger.info("note %s: ignoring unknown key %r", e["id"], k)
     e.setdefault("tags", [])
     e.setdefault("cwd", ".")
     e.setdefault("env", {})
@@ -74,8 +77,8 @@ class Registry:
                     if v:
                         v["provider"] = prov.name
                         entries[v["id"]] = v
-            except Exception as e:  # noqa: BLE001 — a broken provider must not sink the registry
-                print(f"dod: provider {getattr(prov, 'name', '?')} failed: {e}")
+            except Exception:  # a broken provider must not sink the registry (logged, not swallowed)
+                logger.exception("provider %s failed", getattr(prov, "name", "?"))
         for path, src in ((self.paths.registry, "registry"), (self.paths.local, "local")):
             for raw in load_json(path).get("entries", []):
                 v = validate(dict(raw), src)
@@ -95,7 +98,7 @@ class Registry:
             p = e.get("port")
             if e["type"] != "terminal" and p:
                 if p in seen:
-                    print(f"dod: LINT duplicate port {p}: {seen[p]} and {e['id']}")
+                    logger.warning("LINT duplicate port %s: %s and %s", p, seen[p], e["id"])
                 seen[p] = e["id"]
 
     def resolve_cwd(self, e: Entry) -> str:

@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -14,7 +17,7 @@ def load_json(path: Path) -> dict[str, Any]:
     except FileNotFoundError:
         return {}
     except Exception as e:  # noqa: BLE001
-        print(f"dod: WARNING bad JSON in {path.name}: {e}")
+        logger.warning("bad JSON in %s: %s", path.name, e)
         return {}
 
 

@@ -20,6 +20,7 @@ Fixed here (the "graveyard" defects):
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import signal
 import subprocess
@@ -34,6 +35,8 @@ from .config import LOG_CAP, Paths
 from .models import ActionResult, CrashMark, Entry, Lockfile, State, StopReason
 from .registry import Registry
 from .util import load_json, write_json
+
+logger = logging.getLogger(__name__)
 
 
 class ProcHandle(Protocol):
@@ -267,12 +270,12 @@ class Supervisor:
             port = lf.get("port")
             alive = self._owns(lf) and (not port or net.port_open(int(port)))
             if alive:
-                print(f"dod: re-adopted {eid} (pid {lf.get('pid')}) — will die with dod")
+                logger.info("re-adopted %s (pid %s) — will die with dod", eid, lf.get("pid"))
                 continue
             if lf.get("pid", 0) and lf["pid"] > 0 and not self.paths.crash(eid).exists():
                 self._write_crash(eid, None, note="exited while dod was down")
             lp.unlink(missing_ok=True)
-            print(f"dod: reaped stale lockfile {eid}")
+            logger.info("reaped stale lockfile %s", eid)
 
     def shutdown(self) -> None:
         """Kill everything dod owns — this session's children AND inherited survivors.

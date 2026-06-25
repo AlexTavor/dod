@@ -1,3 +1,5 @@
+import logging
+
 from dod.registry import Registry, validate
 from tests.conftest import entry, write_local, write_registry
 
@@ -86,7 +88,8 @@ def test_resolve_cwd_absolute_vs_relative(paths, tmp_path):
     assert reg.resolve_cwd(entry(cwd="sub")) == str(tmp_path / "sub")
 
 
-def test_duplicate_port_lint_warns(paths, capsys):
+def test_duplicate_port_lint_warns(paths, caplog):
     write_registry(paths, [entry("a", port=9000), entry("b", port=9000)])
-    Registry(paths, providers=[]).load()
-    assert "duplicate port 9000" in capsys.readouterr().out
+    with caplog.at_level(logging.WARNING, logger="dod"):
+        Registry(paths, providers=[]).load()
+    assert "duplicate port 9000" in caplog.text
