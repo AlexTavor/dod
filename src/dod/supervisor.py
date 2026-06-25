@@ -178,8 +178,12 @@ class Supervisor:
             self.started_at[eid] = self.clock()
         try:
             pgid = os.getpgid(p.pid)
-        except Exception:  # noqa: BLE001
-            pgid = None
+        except OSError:
+            # start_new_session makes the child its own group leader, so its pgid IS its pid;
+            # fall back to pid rather than storing None, which would no-op every killpg and
+            # orphan the tree on stop/shutdown (atlas R2).
+            pgid = p.pid
+            logger.warning("getpgid failed for %s (pid %s); using pid as the group id", eid, p.pid)
         self._write_lock(eid, p.pid, pgid, port, e["cmd"])
         return {"ok": True, "state": "starting"}
 
@@ -337,7 +341,9 @@ class Supervisor:
         if e.get("state_override") == "archived":
             return done(state="archived")
         lf = self._read_lock(eid)
-        owned = eid in self.procs
+        with self.lock:                        # atlas R1: snapshot once under the lock; a concurrent
+            proc = self.procs.get(eid)          # stop() pops self.procs[eid] under this same lock
+        owned = proc is not None
 
         if e["type"] == "terminal":
             st = "launched" if lf else "stopped"
@@ -351,8 +357,8 @@ class Supervisor:
         mine = owned or self._owns(lf)
         base["controllable"] = mine
 
-        if owned and self.procs[eid].poll() is not None:   # owned-but-exited → crashed
-            rc = self.procs[eid].poll()
+        if proc is not None and proc.poll() is not None:   # owned-but-exited → crashed
+            rc = proc.poll()
             if not self.paths.crash(eid).exists():
                 self._write_crash(eid, rc)
             base["log_tail"] = net.log_tail(self.paths.log(eid))

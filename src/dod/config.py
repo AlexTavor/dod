@@ -6,10 +6,10 @@ project; it lives in a user-global home, ``~/.dod`` by default (override with th
 ``DOD_HOME`` env var, which is also how the tests get an isolated home).
 
 The durable registry (your real dashboards) is *user data* at ``$DOD_HOME/registry.json``
-— it is intentionally not committed to this product repo. ``examples/registry.example.json``
-ships a generic illustration instead. dod only ever WRITES ``local.json`` / ``state.json``
-/ ``discovered.json`` / lockfiles — never ``registry.json``; that read-only boundary is
-the trust model carried over from deck.
+— it is intentionally not committed to this product repo. ``_examples/registry.example.json``
+(bundled in the package) ships a generic illustration instead. dod only ever WRITES
+``local.json`` / ``state.json`` / ``discovered.json`` / lockfiles — never ``registry.json``;
+that read-only boundary is the trust model carried over from deck.
 """
 from __future__ import annotations
 
@@ -29,7 +29,9 @@ ID_RE = re.compile(r"^[a-z0-9_-]+$")
 
 PKG_DIR = Path(__file__).resolve().parent
 WEB_DIR = PKG_DIR / "web"
-EXAMPLE_REGISTRY = PKG_DIR.parent.parent / "examples" / "registry.example.json"
+# Bundled inside the package (shipped in the wheel as package data), not at the repo root, so
+# `dod init` can seed from it once pip-installed, not only from a source checkout (atlas R3).
+EXAMPLE_REGISTRY = PKG_DIR / "_examples" / "registry.example.json"
 
 
 def default_home() -> Path:

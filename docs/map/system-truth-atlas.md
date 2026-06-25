@@ -134,6 +134,9 @@ read raises `KeyError`.
 - **Detector:** a stress test driving concurrent `state()` + `stop()` on the same id.
 - **Remediation (M3/M4):** snapshot `self.procs[eid]` once under the lock in
   `_state_raw`, or read via a single `.get()` and branch on the result.
+- **Resolved (quality/atlas-risk-fixes):** `_state_raw` snapshots `self.procs.get(eid)`
+  under `self.lock` and branches on the result; guarded by a concurrent `state()`/`stop()`
+  stress test.
 
 ### R2: `pgid = None` silently weakens "die with dod"
 If `os.getpgid(p.pid)` raises right after spawn (supervisor.py:167–169), the child's
@@ -143,6 +146,9 @@ cannot tree-kill that child by group: it can orphan.
 - **Likelihood:** rare (getpgid almost never fails for a just-spawned child).
 - **Remediation:** on `None` pgid, fall back to killing `p.pid` directly (and/or
   retry getpgid once); record the degraded state rather than dropping it.
+- **Resolved (quality/atlas-risk-fixes):** `start` catches `OSError` from `getpgid` and
+  records `p.pid` as the group id (the child leads its own group via `start_new_session`),
+  logging the fallback; the lockfile `pgid` is never `None`.
 
 ### R3: `dod init` is a source-only feature
 Because `examples/` is not in the wheel ([F6](#2-footgun-register)), the headline
@@ -152,6 +158,9 @@ an installed dod writes an empty registry.
   matches the example.
 - **Remediation:** force-include `examples/registry.example.json` as package data, or
   embed the example registry as a module constant.
+- **Resolved (quality/atlas-risk-fixes):** the example moved into the package at
+  `src/dod/_examples/registry.example.json` (ships in the wheel by default); a clean
+  wheel install runs `dod init` from it, byte-matching the example (verified).
 
 ### R4: `registry.get()` reload cost under load
 [F1](#2-footgun-register) means every control action and render re-reads three files
