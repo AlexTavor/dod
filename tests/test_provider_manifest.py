@@ -45,6 +45,14 @@ def test_manifest_no_run_is_adopt_only(tmp_path):
     assert e["type"] == "web-external" and e["cmd"] == [] and e["stop"] == "leave"
 
 
+def test_manifest_string_cmd_is_treated_as_adopt_only(tmp_path):
+    # a non-list cmd (e.g. a shell string) is not a valid argv, so it is no cmd: the entry is
+    # adopt-only (web-external), not a "web" entry that claims to launch but has an empty cmd.
+    m = _write(tmp_path / "p", {"id": "p", "name": "P", "run": {"cmd": "node s.js"}})
+    e = manifest_to_entry(m)
+    assert e["type"] == "web-external" and e["cmd"] == [] and e["stop"] == "leave"
+
+
 def test_manifest_missing_id_skipped(tmp_path):
     assert manifest_to_entry(_write(tmp_path / "p", {"name": "no id"})) is None
 
