@@ -22,6 +22,24 @@ def test_find_manifests_prunes_node_modules(tmp_path):
     assert not any("node_modules" in str(p) for p in found)
 
 
+def test_find_manifests_respects_max_depth(tmp_path):
+    # mutation-grading gap: the scan is depth-bounded, but no test exercised the bound, so
+    # mutating `depth + 1` survived. A manifest deeper than max_depth must not be found.
+    deep = tmp_path / "a" / "b" / "c" / "d" / "e"          # manifest dir sits 5 levels below root
+    _write(deep, {"id": "deep", "name": "Deep"})
+    assert find_manifests([tmp_path], max_depth=4) == []                              # beyond the bound
+    assert any(str(deep) in str(p) for p in find_manifests([tmp_path], max_depth=5))  # within the bound
+
+
+def test_find_manifests_skips_hidden_dirs(tmp_path):
+    # the scan descends into normal dirs but skips dotfile dirs (e.g. .git, .venv variants).
+    _write(tmp_path / "shown", {"id": "s", "name": "S"})
+    _write(tmp_path / ".hidden", {"id": "h", "name": "H"})
+    found = find_manifests([tmp_path])
+    assert any("shown" in str(p) for p in found)
+    assert not any(".hidden" in str(p) for p in found)
+
+
 def test_manifest_to_entry_full(tmp_path):
     m = _write(tmp_path / "jobs", {
         "id": "jobs", "name": "Jobs", "description": "the board",
