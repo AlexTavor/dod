@@ -73,7 +73,8 @@ def manifest_to_entry(mpath: Path) -> Entry | None:
             logger.warning("manifest %s missing id/name — skipped", mpath)
         return None
     run = data.get("run") or {}
-    cmd = run.get("cmd") or []
+    cmd = run.get("cmd")
+    cmd = cmd if isinstance(cmd, list) else []   # argv list only: a non-list (e.g. a shell string) is no cmd
     cwd = run.get("cwd", ".")
     cwd = str(Path(cwd) if Path(cwd).is_absolute() else (mpath.parent / cwd))
     desc = str(data.get("description", ""))
@@ -85,7 +86,7 @@ def manifest_to_entry(mpath: Path) -> Entry | None:
         "why": desc or "Registered via dod.project.json.",
         "tags": data.get("tags") or [],
         "type": "web" if launchable else "web-external",
-        "cmd": cmd if isinstance(cmd, list) else [],
+        "cmd": cmd,
         "cwd": cwd,
         "env": run.get("env") or {},
         "port": run.get("port"),
