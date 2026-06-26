@@ -69,6 +69,17 @@ describe('dod-list', () => {
     el.remove();
   });
 
+  it('replaces the row button with a disabled pending label while an action is in flight', async () => {
+    const el = await makeList([live('a')]);
+    el.pending = new Map([['a', 'stop']]);
+    await el.updateComplete;
+    const btn = el.querySelector<HTMLButtonElement>('.btn.pending');
+    expect(btn?.disabled).toBe(true);
+    expect(btn?.textContent?.trim()).toBe('stopping…');
+    expect(el.querySelector('.btn.stop')).toBeNull(); // the normal Stop is gone while pending
+    el.remove();
+  });
+
   it('a drag dropped on another row emits reorder {from,to}', async () => {
     const el = await makeList([live('a'), live('b')]);
     const onReorder = vi.fn();

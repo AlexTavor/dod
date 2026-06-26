@@ -21,6 +21,8 @@ export class DodApp extends LitElement {
 
   @state() private entries: State[] = [];
   @state() private selected: string | null = null;
+  /** id → the action verb in flight, so a clicked button reacts at once (before the POST returns). */
+  @state() private pending = new Map<string, string>();
 
   private timer: ReturnType<typeof setTimeout> | undefined;
   private stopped = false;
@@ -53,12 +55,20 @@ export class DodApp extends LitElement {
   }
 
   private async act(verb: string, id: string): Promise<void> {
-    const res = await this.api.post(verb, { id });
-    if (res.error === 'forbidden') {
-      this.reload();
-      return;
+    if (this.pending.has(id)) return; // already acting on this entry; ignore the repeat click
+    this.pending = new Map(this.pending).set(id, verb); // optimistic: react now, not after the round-trip
+    try {
+      const res = await this.api.post(verb, { id });
+      if (res.error === 'forbidden') {
+        this.reload();
+        return;
+      }
+      await this.refresh();
+    } finally {
+      const next = new Map(this.pending);
+      next.delete(id);
+      this.pending = next;
     }
-    await this.refresh();
   }
 
   /** interact-down: route a dashkit button from a spec dashboard through dod's proxy. */
@@ -91,6 +101,7 @@ export class DodApp extends LitElement {
       <dod-list
         .entries=${this.entries}
         .selected=${this.selected}
+        .pending=${this.pending}
         @select=${(ev: CustomEvent<string>) => {
           this.selected = ev.detail;
         }}
@@ -99,6 +110,7 @@ export class DodApp extends LitElement {
       ></dod-list>
       <dod-detail
         .entry=${sel}
+        .pending=${this.pending}
         @action=${(ev: CustomEvent<{ verb: string; id: string }>) => void this.act(ev.detail.verb, ev.detail.id)}
         @spec-action=${(ev: CustomEvent<{ id: string; action: string; payload: unknown }>) =>
           void this.specAction(ev.detail)}

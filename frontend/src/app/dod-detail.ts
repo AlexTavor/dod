@@ -3,7 +3,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { mount as dashkitMount } from '../dashkit/index';
 import type { ActionHandler } from '../types';
-import { canStart, canStop, isLive, statusWord } from './status';
+import { canStart, canStop, isLive, pendingWord, statusWord } from './status';
 import type { State } from './types';
 
 interface MountHandle {
@@ -22,6 +22,7 @@ type MountFn = (opts: { renderUrl: string; mount: HTMLElement; onAction: ActionH
 @customElement('dod-detail')
 export class DodDetail extends LitElement {
   @property({ attribute: false }) entry: State | null = null;
+  @property({ attribute: false }) pending = new Map<string, string>();
   /** Injectable for tests; defaults to dashkit's mount. */
   mountSpec: MountFn = (opts) => dashkitMount(opts);
 
@@ -34,6 +35,13 @@ export class DodDetail extends LitElement {
 
   private emit(verb: string, id: string): void {
     this.dispatchEvent(new CustomEvent('action', { detail: { verb, id }, bubbles: true, composed: true }));
+  }
+
+  /** While an action is in flight for `e`, the action buttons collapse to one disabled, labelled
+   *  button, so the click reacts at once instead of after the round-trip. Null when idle. */
+  private pendingBtn(e: State): TemplateResult | null {
+    const verb = this.pending.get(e.id);
+    return verb ? html`<button class="btn pending" disabled>${pendingWord(verb)}</button>` : null;
   }
 
   private stopMount(): void {
@@ -82,9 +90,14 @@ export class DodDetail extends LitElement {
       <span class="pill ${s.cls}">${s.word}</span>
       <span class="why">${e.blurb ?? ''}</span>
       <div class="acts">
-        ${canStart(e) ? html`<button class="btn" @click=${() => this.emit('start', e.id)}>Start</button>` : ''}
-        ${canStop(e) ? html`<button class="btn stop" @click=${() => this.emit('stop', e.id)}>Stop</button>` : ''}
-        ${e.controllable ? html`<button class="btn" @click=${() => this.emit('restart', e.id)}>Restart</button>` : ''}
+        ${this.pendingBtn(e) ??
+        html`
+          ${canStart(e) ? html`<button class="btn" @click=${() => this.emit('start', e.id)}>Start</button>` : ''}
+          ${canStop(e) ? html`<button class="btn stop" @click=${() => this.emit('stop', e.id)}>Stop</button>` : ''}
+          ${e.controllable
+            ? html`<button class="btn" @click=${() => this.emit('restart', e.id)}>Restart</button>`
+            : ''}
+        `}
         ${e.port
           ? html`<a class="btn" href="http://127.0.0.1:${e.port}/" target="_blank" rel="noreferrer">open ↗</a>`
           : ''}
@@ -107,16 +120,17 @@ export class DodDetail extends LitElement {
       return html`<div class="pane">
         <h3 style="color:var(--err)">${statusWord(e).word}</h3>
         <pre>${e.log_tail ?? ''}</pre>
-        <button class="btn" @click=${() => this.emit('restart', e.id)}>Restart</button>
+        ${this.pendingBtn(e) ?? html`<button class="btn" @click=${() => this.emit('restart', e.id)}>Restart</button>`}
       </div>`;
     }
     if (!isLive(e)) {
       return html`<div class="pane">
         <h3>${statusWord(e).word}</h3>
         <div>${e.why ?? ''}</div>
-        ${canStart(e)
+        ${this.pendingBtn(e) ??
+        (canStart(e)
           ? html`<button class="btn" @click=${() => this.emit('start', e.id)}>Start</button>`
-          : html`<div>Start it yourself; dod will adopt the port.</div>`}
+          : html`<div>Start it yourself; dod will adopt the port.</div>`)}
       </div>`;
     }
     if (e.render === 'spec') return html`<div class="dk-host" id="dkhost"></div>`;

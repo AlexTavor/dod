@@ -1,7 +1,7 @@
 import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { canStart, canStop, statusWord } from './status';
+import { canStart, canStop, pendingWord, statusWord } from './status';
 import type { State } from './types';
 
 /**
@@ -13,6 +13,7 @@ import type { State } from './types';
 export class DodList extends LitElement {
   @property({ attribute: false }) entries: State[] = [];
   @property() selected: string | null = null;
+  @property({ attribute: false }) pending = new Map<string, string>();
 
   private dragId: string | null = null;
 
@@ -25,6 +26,8 @@ export class DodList extends LitElement {
   }
 
   private button(e: State): TemplateResult | '' {
+    const verb = this.pending.get(e.id);
+    if (verb) return html`<button class="btn pending" disabled>${pendingWord(verb)}</button>`;
     if (canStop(e)) {
       return html`<button
         class="btn stop"
