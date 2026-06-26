@@ -80,6 +80,16 @@ describe('dod-detail', () => {
     el.remove();
   });
 
+  it('shows a disabled pending button in the head while an action is in flight', async () => {
+    const el = await makeDetail({ id: 'a', status: 'live', state: 'ready', controllable: true, stop: 'sigterm' });
+    el.pending = new Map([['a', 'stop']]);
+    await el.updateComplete;
+    const btn = el.querySelector<HTMLButtonElement>('.dhead .btn.pending');
+    expect(btn?.disabled).toBe(true);
+    expect(btn?.textContent?.trim()).toBe('stopping…');
+    el.remove();
+  });
+
   it('routes a dashkit action to a spec-action event', async () => {
     let captured: ((a: string, p: unknown) => void) | undefined;
     const mountSpec = vi.fn((opts: { onAction: (a: string, p: unknown) => void }) => {

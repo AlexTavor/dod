@@ -63,6 +63,33 @@ describe('dod-app', () => {
     app.remove();
   });
 
+  it('marks the entry pending the instant it is clicked, before the POST resolves', async () => {
+    let releasePost!: (r: Response) => void;
+    const heldPost = new Promise<Response>((res) => {
+      releasePost = res;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ entries: [{ id: 'a', status: 'live', state: 'ready', controllable: true, stop: 'sigterm' }], discovered: [] }),
+      )
+      .mockImplementationOnce(() => heldPost) // the stop POST hangs (mirrors the real seconds-long stop)
+      .mockResolvedValue(jsonResponse({ ok: true }));
+    const app = makeApp(new DodApi('t', fetchMock as unknown as FetchLike));
+    await app.refresh();
+    await app.updateComplete;
+    app.querySelector('dod-list')?.dispatchEvent(new CustomEvent('action', { detail: { verb: 'stop', id: 'a' }, bubbles: true }));
+    const list = app.querySelector('dod-list') as HTMLElement & { updateComplete: Promise<unknown> };
+    await app.updateComplete;
+    await list.updateComplete;
+    const btn = app.querySelector<HTMLButtonElement>('dod-list .btn.pending');
+    expect(btn?.disabled).toBe(true);
+    expect(btn?.textContent?.trim()).toBe('stopping…'); // reacts now, while the POST is still in flight
+    releasePost(jsonResponse({ ok: true }));
+    await flush();
+    app.remove();
+  });
+
   it('a rotated-token 403 triggers a reload', async () => {
     const fetchMock = vi
       .fn()

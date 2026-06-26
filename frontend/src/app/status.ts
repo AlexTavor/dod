@@ -30,3 +30,12 @@ export const canStart = (e: State): boolean => !isLive(e) && (e.cmd?.length ?? 0
 
 /** Offer Stop only when it is live, dod-controlled, and not an adopt-only (stop=leave) entry. */
 export const canStop = (e: State): boolean => isLive(e) && !!e.controllable && e.stop !== 'leave';
+
+const PENDING_WORDS: Record<string, string> = {
+  start: 'starting…',
+  stop: 'stopping…',
+  restart: 'restarting…',
+};
+
+/** The label shown on an action button while its request is in flight (optimistic feedback). */
+export const pendingWord = (verb: string): string => PENDING_WORDS[verb] ?? PENDING_WORDS.start;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canStart, canStop, isLive, statusWord } from './status';
+import { canStart, canStop, isLive, pendingWord, statusWord } from './status';
 import type { State } from './types';
 
 const e = (o: Partial<State>): State => ({ id: 'x', ...o });
@@ -56,5 +56,12 @@ describe('canStart / canStop', () => {
   it('isLive reflects status', () => {
     expect(isLive(e({ status: 'live' }))).toBe(true);
     expect(isLive(e({ status: 'stopped' }))).toBe(false);
+  });
+});
+
+describe('pendingWord', () => {
+  // The verb→label data lives in a map (declarative); only the fallback is logic worth testing.
+  it('falls back to the start label for an unknown verb', () => {
+    expect(pendingWord('???')).toBe('starting…');
   });
 });
