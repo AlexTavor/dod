@@ -7,6 +7,7 @@ import type {
   BadgePanel,
   ButtonPanel,
   ChartPanel,
+  DagPanel,
   FormPanel,
   HtmlPanel,
   KvPanel,
@@ -21,6 +22,7 @@ import type {
 } from '../types';
 import { chart, spark } from './charts';
 import { color, fmt } from './format';
+import './dk-dag';
 import './dk-form';
 import './dk-wordcloud';
 
@@ -180,6 +182,8 @@ export function panel(p: Panel, onAction?: ActionHandler): TemplateResult {
         return html`<dk-form .panel=${p as FormPanel} .onAction=${onAction}></dk-form>`;
       case 'wordcloud':
         return html`<dk-wordcloud .panel=${p as WordcloudPanel}></dk-wordcloud>`;
+      case 'dag':
+        return html`<dk-dag .panel=${p as DagPanel} .onAction=${onAction}></dk-dag>`;
       default:
         return html`<div class="dk-panel dk-full">
           <span class="dk-muted">unknown atom: ${p.type}</span>
