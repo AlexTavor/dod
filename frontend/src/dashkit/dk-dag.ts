@@ -44,6 +44,19 @@ const TONE_LEGEND: ReadonlyArray<readonly [string, string]> = [
 const toneOf = (status?: string): string => STATUS_TONE[(status ?? '').toLowerCase()] ?? 'idle';
 const colorOf = (tone: string): string => TONE_COLOR[tone] ?? TONE_COLOR.idle;
 
+/** A left-to-right spline from the source face through each waypoint to the target face. */
+function edgePath(e: PlacedEdge): string {
+  const pts = [{ x: e.x1, y: e.y1 }, ...e.waypoints, { x: e.x2, y: e.y2 }];
+  let d = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const h = Math.max(24, Math.abs(b.x - a.x) / 2);
+    d += ` C${a.x + h},${a.y} ${b.x - h},${b.y} ${b.x},${b.y}`;
+  }
+  return d;
+}
+
 /**
  * The `dag` atom: a layered fix-dependency graph. Each node is a remediation unit coloured by
  * status; an edge runs prerequisite → dependent. Units that can be started now (not begun,
@@ -122,11 +135,9 @@ export class DkDag extends LitElement {
       : null;
 
     const edgeParts: SVGTemplateResult[] = layout.edges.map((e) => {
-      const dx = Math.max(24, Math.abs(e.x2 - e.x1) / 2);
-      const d = `M${e.x1},${e.y1} C${e.x1 + dx},${e.y1} ${e.x2 - dx},${e.y2} ${e.x2},${e.y2}`;
       const on = lit ? lit.has(e.from) && lit.has(e.to) : false;
-      const cls = `dk-dag-edge${on ? ' on' : ''}${(e as PlacedEdge).back ? ' back' : ''}`;
-      return svg`<path class=${cls} d=${d} marker-end="url(#dk-arrow)"></path>`;
+      const cls = `dk-dag-edge${on ? ' on' : ''}${e.back ? ' back' : ''}`;
+      return svg`<path class=${cls} d=${edgePath(e)} marker-end="url(#dk-arrow)"></path>`;
     });
 
     const nodeParts: SVGTemplateResult[] = layout.nodes.map((pn) => {

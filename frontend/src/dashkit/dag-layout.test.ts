@@ -81,3 +81,46 @@ describe('layoutDag cycle safety', () => {
     expect(layoutDag([])).toEqual({ nodes: [], edges: [], width: 0, height: 0 });
   });
 });
+
+describe('layoutDag long-edge routing', () => {
+  // a → b → c, plus a long a → c that spans rank 0..2
+  const diamond = [
+    { id: 'a' },
+    { id: 'b', dependsOn: ['a'] },
+    { id: 'c', dependsOn: ['a', 'b'] },
+  ];
+
+  it('leaves adjacent-rank edges straight (no waypoints)', () => {
+    const l = layoutDag(diamond);
+    expect(l.edges.find((e) => e.from === 'a' && e.to === 'b')!.waypoints).toEqual([]);
+  });
+
+  it('threads a 2-rank edge through one waypoint in the middle column', () => {
+    const l = layoutDag(diamond);
+    const long = l.edges.find((e) => e.from === 'a' && e.to === 'c')!;
+    expect(long.waypoints).toHaveLength(1);
+    expect(long.waypoints[0].x).toBe(pad + colStep + nodeW / 2);
+  });
+
+  it('reserves a slot for the waypoint so it dodges the real node in that rank', () => {
+    const l = layoutDag(diamond);
+    const b = l.nodes.find((n) => n.id === 'b')!;
+    const wpY = l.edges.find((e) => e.from === 'a' && e.to === 'c')!.waypoints[0].y;
+    expect(wpY).not.toBe(b.y + nodeH / 2); // routed around b, not through it
+    expect(l.height).toBe(pad * 2 + 2 * nodeH + rowGap); // rank 1 now holds 2 slots
+  });
+
+  it('adds one waypoint per spanned rank', () => {
+    const l = layoutDag([
+      { id: 'a' },
+      { id: 'b', dependsOn: ['a'] },
+      { id: 'c', dependsOn: ['b'] },
+      { id: 'd', dependsOn: ['c', 'a'] },
+    ]);
+    const long = l.edges.find((e) => e.from === 'a' && e.to === 'd')!;
+    expect(long.waypoints.map((w) => w.x)).toEqual([
+      pad + colStep + nodeW / 2,
+      pad + 2 * colStep + nodeW / 2,
+    ]);
+  });
+});

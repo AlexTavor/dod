@@ -107,7 +107,7 @@
             { id: 'supervisor', label: 'Remediate supervisor', status: 'queued', sub: 'L · high · 7 findings', dependsOn: ['ports', 'registry'] },
             { id: 'cli', label: 'Remediate cli', status: 'in-progress', sub: 'M · med · 3 findings', dependsOn: ['registry'] },
             { id: 'server', label: 'Remediate server', status: 'blocked', sub: 'M · high · 4 findings', dependsOn: ['supervisor'] },
-            { id: 'web', label: 'Remediate web', status: 'error', sub: 'S · med · 2 findings', dependsOn: ['cli'] },
+            { id: 'web', label: 'Remediate web', status: 'error', sub: 'S · med · 2 findings', dependsOn: ['cli', 'atlas'] },
           ],
         },
 
