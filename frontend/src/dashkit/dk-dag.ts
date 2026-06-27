@@ -3,28 +3,12 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 import type { ActionHandler, DagNode, DagPanel } from '../types';
 import { layoutDag, type PlacedEdge } from './dag-layout';
+import { adjacency, bucketOf, frontier, lineage, type Bucket } from './dag-model';
 import { trunc } from './format';
 
-// status word → a tone bucket, then tone → colour. Both carve UnitState (queued/planning/
-// in-cycle/green/blocked/needs-HITL/landed/done) and the remediation state (pending/
-// in-progress/green/needs-hitl/committed/error) fold into five tones. Data-by-key per
-// CLAUDE.md: a lookup table with an explicit fallback, never an if/elif chain.
-const STATUS_TONE: Record<string, string> = {
-  queued: 'idle',
-  pending: 'idle',
-  planning: 'active',
-  'in-cycle': 'active',
-  'in-progress': 'active',
-  green: 'good',
-  landed: 'good',
-  committed: 'good',
-  done: 'good',
-  blocked: 'warn',
-  'needs-hitl': 'warn',
-  error: 'err',
-};
-
-const TONE_COLOR: Record<string, string> = {
+// bucket → CSS variable, plus the legend rows. Presentation only: the status → bucket
+// classification and the graph derivations live in dag-model. Data-by-key per CLAUDE.md.
+const BUCKET_COLOR: Record<Bucket, string> = {
   idle: 'var(--dk-muted)',
   active: 'var(--dk-accent)',
   good: 'var(--dk-ok)',
@@ -32,8 +16,7 @@ const TONE_COLOR: Record<string, string> = {
   err: 'var(--dk-err)',
 };
 
-// legend order + the representative word shown for each tone
-const TONE_LEGEND: ReadonlyArray<readonly [string, string]> = [
+const BUCKET_LEGEND: ReadonlyArray<readonly [Bucket, string]> = [
   ['idle', 'queued'],
   ['active', 'in progress'],
   ['good', 'done'],
@@ -41,8 +24,7 @@ const TONE_LEGEND: ReadonlyArray<readonly [string, string]> = [
   ['err', 'error'],
 ];
 
-const toneOf = (status?: string): string => STATUS_TONE[(status ?? '').toLowerCase()] ?? 'idle';
-const colorOf = (tone: string): string => TONE_COLOR[tone] ?? TONE_COLOR.idle;
+const colorOf = (status?: string): string => BUCKET_COLOR[bucketOf(status)];
 
 /** A left-to-right spline from the source face through each waypoint to the target face. */
 function edgePath(e: PlacedEdge): string {
@@ -59,9 +41,10 @@ function edgePath(e: PlacedEdge): string {
 
 /**
  * The `dag` atom: a layered fix-dependency graph. Each node is a remediation unit coloured by
- * status; an edge runs prerequisite → dependent. Units that can be started now (not begun,
- * every prerequisite done) get a "ready" ring. Hover a node to light up its lineage. Holds
- * only hover state across render polls. Light DOM.
+ * status; an edge runs prerequisite → dependent. Units that can start now (not begun, every
+ * prerequisite done) get a "ready" ring. Hover a node to highlight its lineage. Holds only
+ * hover state across render polls. Light DOM. Geometry comes from dag-layout and the graph
+ * derivations from dag-model; this element only places and paints.
  */
 @customElement('dk-dag')
 export class DkDag extends LitElement {
@@ -77,25 +60,10 @@ export class DkDag extends LitElement {
     return (this.panel.nodes ?? []).filter((n): n is DagNode => !!n && n.id != null);
   }
 
-  /** Walk an adjacency map from `start`, returning every reachable id (excludes `start`). */
-  private reach(start: string, adj: Map<string, string[]>): Set<string> {
-    const seen = new Set<string>();
-    const stack = [start];
-    while (stack.length) {
-      const u = stack.pop()!;
-      for (const v of adj.get(u) ?? [])
-        if (!seen.has(v)) {
-          seen.add(v);
-          stack.push(v);
-        }
-    }
-    return seen;
-  }
-
   private legend(): TemplateResult {
     return html`<div class="dk-legend dk-dag-legend">
-      ${TONE_LEGEND.map(
-        ([tone, label]) => html`<span><i style="background:${colorOf(tone)}"></i>${label}</span>`,
+      ${BUCKET_LEGEND.map(
+        ([bucket, label]) => html`<span><i style="background:${BUCKET_COLOR[bucket]}"></i>${label}</span>`,
       )}
       <span><i class="dk-dag-elig-key"></i>ready now</span>
     </div>`;
@@ -113,26 +81,12 @@ export class DkDag extends LitElement {
       this.panel.edges,
     );
     const byId = new Map(nodes.map((n) => [n.id, n]));
-
-    // adjacency from the placed edges: prerequisites (up) and dependents (down)
-    const up = new Map<string, string[]>();
-    const down = new Map<string, string[]>();
-    for (const n of nodes) {
-      up.set(n.id, []);
-      down.set(n.id, []);
-    }
-    for (const e of layout.edges) {
-      down.get(e.from)?.push(e.to);
-      up.get(e.to)?.push(e.from);
-    }
-
-    const doneIds = new Set(nodes.filter((n) => toneOf(n.status) === 'good').map((n) => n.id));
-    const eligible = (id: string): boolean =>
-      toneOf(byId.get(id)?.status) === 'idle' && (up.get(id) ?? []).every((p) => doneIds.has(p));
-
-    const lit = this.hover
-      ? new Set<string>([this.hover, ...this.reach(this.hover, up), ...this.reach(this.hover, down)])
-      : null;
+    const adj = adjacency(
+      nodes.map((n) => n.id),
+      layout.edges,
+    );
+    const ready = frontier(nodes, adj.up);
+    const lit = this.hover ? lineage(this.hover, adj) : null;
 
     const edgeParts: SVGTemplateResult[] = layout.edges.map((e) => {
       const on = lit ? lit.has(e.from) && lit.has(e.to) : false;
@@ -142,8 +96,8 @@ export class DkDag extends LitElement {
 
     const nodeParts: SVGTemplateResult[] = layout.nodes.map((pn) => {
       const n = byId.get(pn.id)!;
-      const col = colorOf(toneOf(n.status));
-      const elig = eligible(pn.id);
+      const col = colorOf(n.status);
+      const elig = ready.has(pn.id);
       const dim = lit ? !lit.has(pn.id) : false;
       const act = n.action;
       const cls = `dk-dag-node${dim ? ' dim' : ''}${act ? ' act' : ''}`;
@@ -178,15 +132,7 @@ export class DkDag extends LitElement {
           viewBox="0 0 ${layout.width} ${layout.height}"
         >
           <defs>
-            <marker
-              id="dk-arrow"
-              viewBox="0 0 8 8"
-              refX="7"
-              refY="4"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto"
-            >
+            <marker id="dk-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
               <path class="dk-dag-arrowhead" d="M0,0 L8,4 L0,8 z"></path>
             </marker>
           </defs>
