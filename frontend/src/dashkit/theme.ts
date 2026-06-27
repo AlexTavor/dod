@@ -60,7 +60,25 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
 .dk-f{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0} .dk-f.dk-full{grid-column:1/-1}
 .dk-fl{color:var(--dk-muted);font-size:11px}
 .dk-f input,.dk-f select,.dk-f textarea{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius:6px;color:var(--dk-fg);font:inherit;font-size:13px;padding:6px 8px;width:100%}
-.dk-f textarea{min-height:84px;resize:vertical} .dk-fcheck{flex-direction:row;align-items:center;gap:7px}`;
+.dk-f textarea{min-height:84px;resize:vertical} .dk-fcheck{flex-direction:row;align-items:center;gap:7px}
+/* stateful atoms wrap a dk-full panel; display:contents promotes that panel to the grid item so it spans the row */
+dk-dag,dk-form,dk-wordcloud{display:contents}
+.dk-dag-legend{margin:6px 0 0}
+.dk-dag-elig-key{background:transparent!important;border:2px solid var(--dk-c6);border-radius:3px}
+.dk-dag-scroll{margin-top:6px;border:1px solid var(--dk-line);border-radius:9px;background:var(--dk-bg);overflow:auto;max-height:460px}
+svg.dk-dag{display:block}
+.dk-dag-edge{fill:none;stroke:var(--dk-line);stroke-width:1.5}
+.dk-dag-edge.back{stroke-dasharray:4 3}
+.dk-dag-edge.on{stroke:var(--dk-accent);stroke-width:2}
+.dk-dag-arrowhead{fill:var(--dk-line)}
+.dk-dag-node{transition:opacity .15s ease}
+.dk-dag-node.act{cursor:pointer}
+.dk-dag-node.dim{opacity:.3}
+.dk-dag-box{fill:var(--dk-panel);stroke:var(--dk-line);stroke-width:1}
+.dk-dag-box.elig{stroke:var(--dk-c6);stroke-width:2}
+.dk-dag-node:hover .dk-dag-box{stroke:var(--dk-accent)}
+.dk-dag-lbl{fill:var(--dk-fg);font-size:12px;font-weight:600}
+.dk-dag-sub{fill:var(--dk-muted);font-size:11px;font-family:ui-monospace,monospace}`;
 
 /** Inject the theme once. Idempotent and safe to call on every render. */
 export function injectCSS(): void {

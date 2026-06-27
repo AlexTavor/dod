@@ -96,6 +96,21 @@
           ],
         },
 
+        { type: 'section', title: 'Fix-dependency DAG' },
+        {
+          type: 'dag', title: 'Remediation units — what unblocks what (hover a node)',
+          nodes: [
+            { id: 'atlas', label: 'Atlas baseline', status: 'committed', sub: 'baseline' },
+            { id: 'ports', label: 'Remediate ports', status: 'committed', sub: 'S · low · 2 findings', dependsOn: ['atlas'] },
+            { id: 'registry', label: 'Remediate registry', status: 'green', sub: 'M · med · 5 findings', dependsOn: ['atlas'] },
+            { id: 'sampler', label: 'Remediate sampler', status: 'queued', sub: 'S · low · 1 finding', dependsOn: ['ports'] },
+            { id: 'supervisor', label: 'Remediate supervisor', status: 'queued', sub: 'L · high · 7 findings', dependsOn: ['ports', 'registry'] },
+            { id: 'cli', label: 'Remediate cli', status: 'in-progress', sub: 'M · med · 3 findings', dependsOn: ['registry'] },
+            { id: 'server', label: 'Remediate server', status: 'blocked', sub: 'M · high · 4 findings', dependsOn: ['supervisor'] },
+            { id: 'web', label: 'Remediate web', status: 'error', sub: 'S · med · 2 findings', dependsOn: ['cli', 'atlas'] },
+          ],
+        },
+
         { type: 'section', title: 'Actions (interact-down)' },
         {
           type: 'actions', title: 'Try it',

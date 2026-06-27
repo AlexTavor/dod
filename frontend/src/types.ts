@@ -177,6 +177,37 @@ export interface WordcloudPanel {
   facets?: WordcloudFacet[];
 }
 
+export interface DagNode {
+  id: string;
+  /** Human label; falls back to `id`. */
+  label?: string;
+  /** Lifecycle word — carve UnitState or a remediation state; maps to a colour + the legend. */
+  status?: string;
+  /** Second line, e.g. "M · high · 4 findings". */
+  sub?: string;
+  /** Prerequisite node ids; an edge runs prerequisite → this node. */
+  dependsOn?: string[];
+  /** Optional click action routed through onAction (e.g. open this unit's findings). */
+  action?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface DagEdge {
+  /** The prerequisite, done first. */
+  from: string;
+  /** The dependent, unblocked once `from` is done. */
+  to: string;
+}
+
+/** A fix-dependency graph: nodes carry status, edges come from `dependsOn` and/or `edges`. */
+export interface DagPanel {
+  type: 'dag';
+  id?: string;
+  title?: string;
+  nodes?: DagNode[];
+  edges?: DagEdge[];
+}
+
 /** Any atom dashkit does not (yet) know: rendered as a labelled fallback, never thrown. */
 export interface UnknownPanel {
   type: string;
@@ -198,4 +229,5 @@ export type Panel =
   | ButtonPanel
   | FormPanel
   | WordcloudPanel
+  | DagPanel
   | UnknownPanel;
