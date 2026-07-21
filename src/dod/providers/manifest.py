@@ -113,7 +113,9 @@ class ManifestProvider:
     def from_paths(cls, paths: Paths) -> ManifestProvider:
         return cls(load_json(paths.home / "providers" / "manifest.json"))
 
-    def discover(self, paths: Paths) -> list[Entry]:
+    def discover(self, paths: Paths, reserved: frozenset[int] = frozenset()) -> list[Entry]:
+        # `reserved` is ignored: a manifest declares its own port, dod does not allocate it.
+        # A manifest port that collides is the author's to fix; Registry._lint_ports reports it.
         now = time.monotonic()
         if self._cache is not None and (now - self._cache_at) < self.ttl:
             return self._cache

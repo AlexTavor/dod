@@ -82,21 +82,27 @@ class PddProvider:
         self.ttl = ttl                 # discover() runs every sampler tick — cache the fs scan
         self._cache: list[Entry] | None = None
         self._cache_at = 0.0
+        self._cache_reserved: frozenset[int] = frozenset()
 
     @classmethod
     def from_paths(cls, paths: Paths) -> PddProvider:
         cfg = load_json(paths.home / "providers" / "pdd.json")
         return cls(cfg)
 
-    def discover(self, paths: Paths) -> list[Entry]:
+    def discover(self, paths: Paths, reserved: frozenset[int] = frozenset()) -> list[Entry]:
         now = time.monotonic()
-        if self._cache is not None and (now - self._cache_at) < self.ttl:
-            return self._cache
-        self._cache = self._scan(paths)
+        # The cache keys on `reserved` too: a newly-claimed port must re-scan rather than
+        # serve an assignment made when that port still looked free.
+        cached = self._cache
+        if (cached is not None and (now - self._cache_at) < self.ttl
+                and self._cache_reserved == reserved):
+            return cached
+        self._cache = self._scan(paths, reserved)
         self._cache_at = now
+        self._cache_reserved = reserved
         return self._cache
 
-    def _scan(self, paths: Paths) -> list[Entry]:
+    def _scan(self, paths: Paths, reserved: frozenset[int] = frozenset()) -> list[Entry]:
         cfg = self.config
         if cfg.get("enabled") is False:
             return []
@@ -121,7 +127,7 @@ class PddProvider:
             for kind in kinds:
                 sub, label = KINDS[kind]
                 eid = f"pdd-{slug}-{kind}"
-                port = alloc.allocate(eid)
+                port = alloc.allocate(eid, reserved)
                 entries.append({
                     "id": eid,
                     "name": f"PDD · {repo.name} · {label}",

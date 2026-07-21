@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .config import ID_RE, Paths
 from .models import ActionResult, Entry
+from .ports import claimed_ports
 from .util import load_json, write_json
 
 if TYPE_CHECKING:
@@ -70,13 +71,22 @@ class Registry:
     def load(self) -> dict[str, Entry]:
         """Merged, validated entries with the archive overlay applied + duplicate-port lint."""
         entries: dict[str, Entry] = {}
+        # Ports already spoken for, threaded through the providers in order. Seeded from the
+        # hand-registered tiers, then grown with each provider's own ports, so a provider that
+        # allocates (PDD) cannot be handed a port a manifest or a durable entry already binds.
+        # This has to happen here: only the Registry sees every source, and it cannot be fixed
+        # afterwards because a provider bakes its port into the argv it emits.
+        reserved = set(claimed_ports(self.paths))
         for prov in self.providers:
             try:
-                for raw in prov.discover(self.paths):
+                for raw in prov.discover(self.paths, frozenset(reserved)):
                     v = validate(dict(raw), f"provider:{prov.name}")
                     if v:
                         v["provider"] = prov.name
                         entries[v["id"]] = v
+                        port = v.get("port")
+                        if v["type"] != "terminal" and port:
+                            reserved.add(port)
             except Exception:  # a broken provider must not sink the registry (logged, not swallowed)
                 logger.exception("provider %s failed", getattr(prov, "name", "?"))
         for path, src in ((self.paths.registry, "registry"), (self.paths.local, "local")):
