@@ -4,14 +4,14 @@
 // dashkit.js. Interactive-atom styles (wordcloud, forms, actions) arrive with those atoms
 // in W4.
 const CSS = `
-.dk-root{--dk-bg:#16140f;--dk-panel:#1f1b15;--dk-fg:#ece6d8;--dk-muted:#9a9384;--dk-line:#352f25;
+.dk-root{--dk-bg:#16140f;--dk-panel:#1f1b15;--dk-fg:#ece6d8;--dk-muted:#9a9384;--dk-line:#352f25;--dk-edge:#776d5c;
   --dk-accent:#d98a4f;--dk-accent2:#cda94e;--dk-ok:#6fa8a0;--dk-warn:#cda94e;--dk-err:#d4707a;
   --dk-c1:#d98a4f;--dk-c2:#6fa8a0;--dk-c3:#cda94e;--dk-c4:#a98bd0;--dk-c5:#d4707a;--dk-c6:#7f9bd1;
   color:var(--dk-fg);background:var(--dk-bg);font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;
   box-sizing:border-box;padding:18px 20px;display:block;min-height:100%}
 .dk-root *{box-sizing:border-box}
 html[data-theme=light] .dk-root,.dk-root[data-theme=light]{--dk-bg:#faf8f3;--dk-panel:#fff;--dk-fg:#1c1b19;
-  --dk-muted:#7a756c;--dk-line:#e7e2d8;--dk-accent:#b4541f;--dk-accent2:#9a7a18;--dk-ok:#3f807a;
+  --dk-muted:#7a756c;--dk-line:#e7e2d8;--dk-edge:#8b8478;--dk-accent:#b4541f;--dk-accent2:#9a7a18;--dk-ok:#3f807a;
   --dk-warn:#9a7a18;--dk-err:#b1414f;--dk-c1:#b4541f;--dk-c2:#3f807a;--dk-c3:#9a7a18;--dk-c4:#7a5bb0;
   --dk-c5:#b1414f;--dk-c6:#41639b}
 .dk-title{font-size:16px;font-weight:600;letter-spacing:.02em;margin:0 0 12px}
@@ -67,10 +67,13 @@ dk-dag,dk-form,dk-wordcloud{display:contents}
 .dk-dag-elig-key{background:transparent!important;border:2px solid var(--dk-c6);border-radius:3px}
 .dk-dag-scroll{margin-top:6px;border:1px solid var(--dk-line);border-radius:9px;background:var(--dk-bg);overflow:auto;max-height:460px}
 svg.dk-dag{display:block}
-.dk-dag-edge{fill:none;stroke:var(--dk-line);stroke-width:1.5}
+/* --dk-edge, not --dk-line: a dependency arrow is a graphical object carrying meaning and
+   needs >=3:1 against the scroll box's --dk-bg, while --dk-line is a hairline border that
+   should stay quiet. Sharing one token put every edge at ~1.4:1 dark / ~1.2:1 light. */
+.dk-dag-edge{fill:none;stroke:var(--dk-edge);stroke-width:1.5}
 .dk-dag-edge.back{stroke-dasharray:4 3}
 .dk-dag-edge.on{stroke:var(--dk-accent);stroke-width:2}
-.dk-dag-arrowhead{fill:var(--dk-line)}
+.dk-dag-arrowhead{fill:var(--dk-edge)}
 .dk-dag-node{transition:opacity .15s ease}
 .dk-dag-node.act{cursor:pointer}
 .dk-dag-node.dim{opacity:.3}
