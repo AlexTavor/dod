@@ -76,4 +76,35 @@ describe('frontier', () => {
   it('treats a not-started root with no prerequisites as ready', () => {
     expect(frontier([{ id: 'r', status: 'queued' }], adjacency(['r'], []).up).has('r')).toBe(true);
   });
+
+  // Fail-closed. A producer owns its own status vocabulary, so dashkit will meet words it
+  // does not know ('claimed', 'waiting_contention', an UNKNOWN from a failed gh lookup).
+  // Such a word must never be read as startable and never as a finished prerequisite.
+  it('never offers a node whose status is unrecognised, even with every prerequisite done', () => {
+    const up = adjacency(['a', 'x'], [{ from: 'a', to: 'x' }]).up;
+    const nodes: DagNode[] = [
+      { id: 'a', status: 'done' },
+      { id: 'x', status: 'claimed' },
+    ];
+    expect(frontier(nodes, up).has('x')).toBe(false);
+  });
+
+  it('never treats an unrecognised prerequisite as finished', () => {
+    const up = adjacency(['p', 'q'], [{ from: 'p', to: 'q' }]).up;
+    const nodes: DagNode[] = [
+      { id: 'p', status: 'waiting_contention' },
+      { id: 'q', status: 'queued' },
+    ];
+    expect(frontier(nodes, up).has('q')).toBe(false);
+  });
+
+  it('never offers a node with a missing status', () => {
+    expect(frontier([{ id: 'r' }], adjacency(['r'], []).up).has('r')).toBe(false);
+  });
+
+  // The colour fallback is unchanged and deliberately separate: an unknown word still paints
+  // as not-started. That is presentation, and it no longer implies eligibility.
+  it('still paints an unrecognised status as not-started', () => {
+    expect(bucketOf('claimed')).toBe('idle');
+  });
 });
