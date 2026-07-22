@@ -85,6 +85,19 @@ class App:
     def serve(self, port: int) -> int:
         from .server import make_handler  # late import to avoid cycle
         configure_logging(self.paths)              # daemon owns logging; CLI paths keep printing
+
+        # Bind FIRST, and claim ownership of shared state only once the port is ours.
+        # This used to set _serving and register the atexit shutdown before binding, so a
+        # failed bind — the normal outcome when a dod is already serving this port — ran the
+        # full teardown on the way out: it deleted the LIVE daemon's server.json and killed
+        # every child that daemon owned. Starting a second dod took down the first.
+        try:
+            httpd = ThreadingHTTPServer((HOST, port), make_handler(self))
+        except OSError as e:
+            print(f"dod: cannot bind {HOST}:{port}: {e}")
+            print("dod: another dod is probably already serving it; nothing was changed.")
+            return 1
+
         self._serving = True
         atexit.register(self.shutdown)
         self.supervisor.reap_on_boot()             # re-adopt survivors / record deaths
@@ -102,7 +115,7 @@ class App:
         print(f"dod → http://{HOST}:{port}   ({n} dashboards registered)")
         print(f"      CLI: dod ls   ·   token → {self.paths.token}")
         try:
-            ThreadingHTTPServer((HOST, port), make_handler(self)).serve_forever()
+            httpd.serve_forever()
         except KeyboardInterrupt:
             self.shutdown()
         return 0

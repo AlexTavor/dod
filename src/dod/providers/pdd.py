@@ -18,6 +18,7 @@ If ``cli`` is missing or not found on disk, the provider yields nothing (cleanly
 from __future__ import annotations
 
 import re
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -33,6 +34,11 @@ KINDS = {
     "findings": ("dashboard", "findings"),
     "plan": ("plan", "plan"),
 }
+
+# `dag` is ours, not PDD's: the same .pdd/plan.json rendered as a dependency graph through
+# the dod-kit contract, so dod draws it natively instead of framing PDD's gantt. It needs no
+# node and no PDD CLI, so it stays available even when `cli` is unset -- see _dag_entry.
+DAG_KIND = "dag"
 PRUNE = {"node_modules", ".git", ".venv", "venv", "dist", "build", ".vite",
          "__pycache__", ".next", "target", ".cache"}
 
@@ -102,16 +108,42 @@ class PddProvider:
         self._cache_reserved = reserved
         return self._cache
 
+    def _dag_entry(self, slug: str, repo: Path, port: int) -> Entry:
+        """The plan as a native dag spec, served by our own stdlib kit. No node, no PDD CLI."""
+        return {
+            "id": f"pdd-{slug}-{DAG_KIND}",
+            "name": f"PDD · {repo.name} · plan graph",
+            "blurb": f"{repo.name}'s build plan as a dependency graph (.pdd/plan.json).",
+            "why": f"The same plan PDD draws as a gantt, drawn as the DAG it actually is: an "
+                   f"edge only where {repo.name} declares a real dependency, so what can be "
+                   f"worked in parallel is readable instead of implied by a depth axis.",
+            "tags": ["pdd", slug, "plan"],
+            "type": "web",
+            "cmd": [sys.executable, "-m", "dod.plankit", str(repo), "--port", str(port)],
+            "cwd": str(repo),
+            "port": port,
+            "ready": {"kind": "http", "path": "/", "status": 200},
+            "ready_timeout_s": 15,
+            "stop": "sigterm",
+            "singleton": True,
+        }
+
     def _scan(self, paths: Paths, reserved: frozenset[int] = frozenset()) -> list[Entry]:
         cfg = self.config
         if cfg.get("enabled") is False:
             return []
-        cli = cfg.get("cli")
-        if not cli or not Path(cli).expanduser().exists():
+        requested = cfg.get("dashboards") or ["findings", "plan"]
+        want_dag = DAG_KIND in requested
+
+        # The node dashboards need PDD's CLI on disk; the dag view does not. Missing cli
+        # therefore disables those kinds rather than the whole provider.
+        cli_path = Path(str(cfg["cli"])).expanduser() if cfg.get("cli") else None
+        cli = str(cli_path) if cli_path and cli_path.exists() else None
+        kinds = [k for k in requested if k in KINDS] if cli else []
+        if not kinds and not want_dag:
             return []                                   # cleanly disabled until configured
-        cli = str(Path(cli).expanduser())
+
         roots = [Path(r).expanduser() for r in cfg.get("roots") or [Path.home() / "Documents"]]
-        kinds = [k for k in (cfg.get("dashboards") or ["findings", "plan"]) if k in KINDS]
         repos = self._find(roots, int(cfg.get("max_depth", 4)))
 
         alloc = PortAllocator(paths.ports)
@@ -124,24 +156,33 @@ class PddProvider:
 
         entries: list[Entry] = []
         for slug, repo in sorted(slugs.items()):
-            for kind in kinds:
-                sub, label = KINDS[kind]
-                eid = f"pdd-{slug}-{kind}"
-                port = alloc.allocate(eid, reserved)
-                entries.append({
-                    "id": eid,
-                    "name": f"PDD · {repo.name} · {label}",
-                    "blurb": f"{label} dashboard for {repo.name} (.pdd, read-only viewer)",
-                    "why": f"PDD {label} viewer over {repo}/.pdd — managed by dod so it gets a "
-                           f"unique port and dies with dod.",
-                    "tags": ["pdd", slug],
-                    "type": "web",
-                    "cmd": ["node", cli, sub, str(repo), "--port", str(port), "--no-open"],
-                    "cwd": str(repo),
-                    "port": port,
-                    "ready": {"kind": "http", "path": "/", "status": 200},
-                    "ready_timeout_s": 25,
-                    "stop": "sigterm",
-                    "singleton": True,
-                })
+            if want_dag:
+                eid = f"pdd-{slug}-{DAG_KIND}"
+                entries.append(self._dag_entry(slug, repo, alloc.allocate(eid, reserved)))
+            if cli:
+                for kind in kinds:
+                    eid = f"pdd-{slug}-{kind}"
+                    entries.append(self._node_entry(
+                        slug, repo, kind, cli, alloc.allocate(eid, reserved)))
         return entries
+
+    @staticmethod
+    def _node_entry(slug: str, repo: Path, kind: str, cli: str, port: int) -> Entry:
+        """One of PDD's own dashboards, run from the PDD CLI and framed by dod."""
+        sub, label = KINDS[kind]
+        return {
+            "id": f"pdd-{slug}-{kind}",
+            "name": f"PDD · {repo.name} · {label}",
+            "blurb": f"{label} dashboard for {repo.name} (.pdd, read-only viewer)",
+            "why": f"PDD {label} viewer over {repo}/.pdd — managed by dod so it gets a "
+                   f"unique port and dies with dod.",
+            "tags": ["pdd", slug],
+            "type": "web",
+            "cmd": ["node", cli, sub, str(repo), "--port", str(port), "--no-open"],
+            "cwd": str(repo),
+            "port": port,
+            "ready": {"kind": "http", "path": "/", "status": 200},
+            "ready_timeout_s": 25,
+            "stop": "sigterm",
+            "singleton": True,
+        }
