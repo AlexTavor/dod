@@ -32,7 +32,7 @@ def test_local_overrides_durable_on_id_collision(paths):
 def test_provider_entries_merged_but_durable_wins(paths):
     class P:
         name = "p"
-        def discover(self, _paths):
+        def discover(self, _paths, _reserved=frozenset()):
             return [entry("a", name="prov"), entry("b", name="prov-only")]
 
     write_registry(paths, [entry("a", name="durable")])
@@ -45,7 +45,7 @@ def test_provider_entries_merged_but_durable_wins(paths):
 def test_broken_provider_does_not_sink_registry(paths):
     class Boom:
         name = "boom"
-        def discover(self, _paths):
+        def discover(self, _paths, _reserved=frozenset()):
             raise RuntimeError("kaboom")
 
     write_registry(paths, [entry("a")])
@@ -93,3 +93,58 @@ def test_duplicate_port_lint_warns(paths, caplog):
     with caplog.at_level(logging.WARNING, logger="dod"):
         Registry(paths, providers=[]).load()
     assert "duplicate port 9000" in caplog.text
+
+
+def test_reserved_ports_are_threaded_through_providers_in_order(paths):
+    """Regression: an allocating provider was handed a port a PEER provider already bound.
+
+    The first fix aimed at the wrong layer. It reserved ports from the durable and local
+    files, but the colliding ports came from the *manifest provider* — entries that declare
+    their own port and never touch the allocator. Only the Registry sees every source, and
+    the collision cannot be repaired afterwards because a provider bakes its port into the
+    argv it emits, so the reservation set is threaded down in provider order.
+    """
+    seen: list[frozenset[int]] = []
+
+    class Declaring:                       # stands in for ManifestProvider: author-set ports
+        name = "declaring"
+        def discover(self, _paths, reserved=frozenset()):
+            seen.append(reserved)
+            return [entry("jobsearch", port=4317)]
+
+    class Allocating:                      # stands in for PddProvider: dod-assigned ports
+        name = "allocating"
+        def discover(self, _paths, reserved=frozenset()):
+            seen.append(reserved)
+            port = next(p for p in range(4300, 4400) if p not in reserved)
+            return [entry("pdd-hoops-plan", port=port)]
+
+    loaded = Registry(paths, providers=[Declaring(), Allocating()]).load()
+
+    assert seen[0] == frozenset()                       # nothing claimed yet
+    assert 4317 in seen[1]                              # the peer's port reached the allocator
+    assert loaded["pdd-hoops-plan"]["port"] != 4317
+    ports = sorted(e["port"] for e in loaded.values() if e.get("port"))
+    assert len(ports) == len(set(ports))                # no duplicate port in the merged catalog
+
+
+def test_terminal_provider_entries_do_not_reserve_a_port(paths):
+    """no-op path: a terminal entry binds nothing, so it must not shrink the pool.
+
+    Matches _lint_ports, which skips terminals for the same reason.
+    """
+    seen: list[frozenset[int]] = []
+
+    class Term:
+        name = "term"
+        def discover(self, _paths, reserved=frozenset()):
+            return [entry("shell", type="terminal", port=4317)]
+
+    class Watcher:
+        name = "watcher"
+        def discover(self, _paths, reserved=frozenset()):
+            seen.append(reserved)
+            return []
+
+    Registry(paths, providers=[Term(), Watcher()]).load()
+    assert seen[0] == frozenset()
