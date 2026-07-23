@@ -185,6 +185,9 @@ export interface DagNode {
   status?: string;
   /** Second line, e.g. "M · high · 4 findings". */
   sub?: string;
+  /** Relative cost of the unit. Positions the node on the earliest-start axis and sizes its
+   *  float bar; defaults to 1, so a weightless graph lays out by plain dependency depth. */
+  weight?: number;
   /** Prerequisite node ids; an edge runs prerequisite → this node. */
   dependsOn?: string[];
   /** Optional click action routed through onAction (e.g. open this unit's findings). */

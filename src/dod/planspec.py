@@ -66,33 +66,63 @@ def dangling_deps(items: list[dict[str, Any]]) -> list[tuple[str, str]]:
     return [(str(i["id"]), d) for i in items for d in deps_of(i) if d not in ids]
 
 
-def cycle_nodes(items: list[dict[str, Any]]) -> list[str]:
-    """Ids that never reach in-degree zero, i.e. are trapped in a dependency cycle."""
+# --- the plan graph, over edges whose endpoints both exist ---------------------------------
+# One traversal underlies every graph fact below (cycle detection, topological order, the
+# concurrency ceiling, the critical path), so there is a single place the edge set is built.
+
+def _forward(items: list[dict[str, Any]]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Prerequisite (`pred`) and dependent (`succ`) maps, dropping edges to unknown ids."""
     ids = {str(i["id"]) for i in items}
-    indeg = {str(i["id"]): len([d for d in deps_of(i) if d in ids]) for i in items}
-    outs: dict[str, list[str]] = {k: [] for k in ids}
+    pred: dict[str, list[str]] = {str(i["id"]): [] for i in items}
+    succ: dict[str, list[str]] = {str(i["id"]): [] for i in items}
     for i in items:
         for d in deps_of(i):
             if d in ids:
-                outs[d].append(str(i["id"]))
-    queue = [k for k, v in indeg.items() if v == 0]
-    seen = 0
+                pred[str(i["id"])].append(d)
+                succ[d].append(str(i["id"]))
+    return pred, succ
+
+
+def _kahn(items: list[dict[str, Any]]) -> tuple[list[str], list[str]]:
+    """Kahn's algorithm once: returns (resolved order, ids left in a cycle). Everything that
+    needs a topological order or cycle membership is derived from this, never a second sweep."""
+    pred, succ = _forward(items)
+    indeg = {k: len(v) for k, v in pred.items()}
+    queue = sorted(k for k, d in indeg.items() if d == 0)
+    order: list[str] = []
     while queue:
-        u = queue.pop()
-        seen += 1
-        for v in outs[u]:
+        u = queue.pop(0)
+        order.append(u)
+        for v in succ[u]:
             indeg[v] -= 1
             if indeg[v] == 0:
                 queue.append(v)
-    return sorted(k for k, v in indeg.items() if v > 0) if seen < len(ids) else []
+    cyclic = sorted(k for k in indeg if k not in set(order))
+    return order, cyclic
+
+
+def cycle_nodes(items: list[dict[str, Any]]) -> list[str]:
+    """Ids trapped in a dependency cycle (never reach in-degree zero)."""
+    return _kahn(items)[1]
+
+
+def _topo(items: list[dict[str, Any]]) -> list[str]:
+    """A full ordering: the resolved topological order, then any cycle remnant appended."""
+    order, cyclic = _kahn(items)
+    return order + cyclic
 
 
 def _sub(item: dict[str, Any]) -> str:
-    """The node's second line: where it sits and how big it is, compactly."""
-    bits = [str(item[k]) for k in ("track", "size") if item.get(k)]
-    if item.get("critical"):
-        bits.append("critical")
-    return " · ".join(bits)
+    """The node's second line: where it sits and how big it is, compactly. Criticality is not
+    named here -- the graph draws the critical path in the redline colour, derived by CPM
+    rather than trusting the plan's own ``critical`` flag."""
+    return " · ".join(str(item[k]) for k in ("track", "size") if item.get(k))
+
+
+def weight_of(item: dict[str, Any]) -> int:
+    """The unit's relative cost, from its size letter. Positions the node on the earliest-start
+    axis and sizes its float bar; an unknown size counts as 1."""
+    return SIZE_WEIGHT.get(str(item.get("size", "")).upper(), 1)
 
 
 def dag_nodes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -103,10 +133,58 @@ def dag_nodes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "label": str(i.get("title") or i["id"]),
             "status": status_word(i.get("status")),
             "sub": _sub(i),
+            "weight": weight_of(i),
             "dependsOn": deps_of(i),
         }
         for i in items
     ]
+
+
+def max_concurrency(items: list[dict[str, Any]]) -> int:
+    """The largest set of mutually-independent units: the real ceiling on how many can be
+    worked at once. This is the size of the maximum antichain, which by Dilworth's theorem is
+    ``n - (maximum matching over the reachability relation)``. Weight-free."""
+    _, succ = _forward(items)
+    ids = [str(i["id"]) for i in items]
+    # reachability: v in reach[u] iff there is a path u -> ... -> v (u ordered before v)
+    reach: dict[str, set[str]] = {i: set() for i in ids}
+    for u in reversed(list(_topo(items))):
+        for v in succ[u]:
+            reach[u].add(v)
+            reach[u] |= reach[v]
+    # maximum bipartite matching of u -> (something reachable from u)
+    match: dict[str, str] = {}
+
+    def augment(u: str, seen: set[str]) -> bool:
+        for v in reach[u]:
+            if v in seen:
+                continue
+            seen.add(v)
+            if v not in match or augment(match[v], seen):
+                match[v] = u
+                return True
+        return False
+
+    matched = sum(1 for u in ids if augment(u, set()))
+    return len(ids) - matched
+
+
+def critical_units(items: list[dict[str, Any]]) -> set[str]:
+    """The zero-float units: the chain whose weighted length sets the earliest finish. Derived
+    by CPM over the unit weights, so it does not trust the plan's own ``critical`` flag."""
+    by = {str(i["id"]): i for i in items}
+    pred, succ = _forward(items)
+    order = _topo(items)
+    w = {k: weight_of(by[k]) for k in by}
+    asap: dict[str, int] = dict.fromkeys(by, 0)
+    for u in order:
+        asap[u] = max((asap[p] + w[p] for p in pred[u]), default=0)
+    total = max((asap[k] + w[k] for k in by), default=0)
+    late = dict.fromkeys(by, total)
+    for u in reversed(order):
+        if succ[u]:
+            late[u] = min(late[s] - w[s] for s in succ[u])
+    return {k for k in by if late[k] - w[k] - asap[k] < 1e-9}
 
 
 def ready_ids(items: list[dict[str, Any]]) -> list[str]:
@@ -134,13 +212,21 @@ def spec_from_plan(plan: dict[str, Any], repo: str = "") -> dict[str, Any]:
 
     done = [i for i in items if status_word(i.get("status")) in ("done", "green")]
     ready = ready_ids(items)
-    weight = sum(SIZE_WEIGHT.get(str(i.get("size", "")).upper(), 1) for i in items)
-    done_weight = sum(SIZE_WEIGHT.get(str(i.get("size", "")).upper(), 1) for i in done)
+    weight = sum(weight_of(i) for i in items)
+    done_weight = sum(weight_of(i) for i in done)
+    crit = critical_units(items)
+    crit_weight = sum(weight_of(i) for i in items if str(i["id"]) in crit)
 
     panels: list[dict[str, Any]] = [
         {"type": "stat", "label": "units", "value": len(items),
          "sub": f"{len(done)} done"},
         {"type": "stat", "label": "ready now", "value": len(ready), "color": 1},
+        # The ceiling on useful parallelism: the most units that can be worked at once. Not a
+        # count of anything visible in one column -- it is the largest mutually-independent set.
+        {"type": "stat", "label": "max parallel", "value": max_concurrency(items)},
+        # The spine: zero-float units, and the weighted length no amount of parallelism beats.
+        {"type": "stat", "label": "critical path", "value": len(crit),
+         "sub": f"{crit_weight} u"},
         {"type": "stat", "label": "phases", "value": len(plan.get("phases") or [])},
         {"type": "progress", "label": "plan complete (size-weighted)",
          "value": done_weight, "max": weight},

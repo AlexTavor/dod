@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { DAG_DEFAULTS, edgesOf, layoutDag } from './dag-layout';
+import { DAG_DEFAULTS, edgesOf, layoutDag, type DagInputNode } from './dag-layout';
 
-const { nodeW, nodeH, colGap, rowGap, pad } = DAG_DEFAULTS;
-const colStep = nodeW + colGap;
+const { nodeH, minW, scale, gap, rowGap, pad } = DAG_DEFAULTS;
 const rowStep = nodeH + rowGap;
+const wOf = (weight = 1): number => Math.max(minW, weight * scale - gap);
 
 describe('edgesOf', () => {
   it('derives edges from dependsOn (prerequisite → dependent)', () => {
@@ -36,34 +36,83 @@ describe('layoutDag ranks', () => {
     ]);
     expect(Object.fromEntries(l.nodes.map((n) => [n.id, n.rank]))).toEqual({ a: 0, b: 1, c: 1, d: 2 });
   });
-
-  it('places independent roots in the same rank, stacked', () => {
-    const l = layoutDag([{ id: 'a' }, { id: 'b' }]);
-    const a = l.nodes.find((n) => n.id === 'a')!;
-    const b = l.nodes.find((n) => n.id === 'b')!;
-    expect([a.rank, b.rank]).toEqual([0, 0]);
-    expect(a.y).toBe(pad);
-    expect(b.y).toBe(pad + rowStep);
-  });
 });
 
-describe('layoutDag geometry', () => {
-  it('positions ranks left to right and sizes to content', () => {
+describe('layoutDag earliest-start axis', () => {
+  it('places each node at its weighted earliest start', () => {
     const l = layoutDag([{ id: 'a' }, { id: 'b', dependsOn: ['a'] }, { id: 'c', dependsOn: ['b'] }]);
     expect(Object.fromEntries(l.nodes.map((n) => [n.id, n.x]))).toEqual({
       a: pad,
-      b: pad + colStep,
-      c: pad + 2 * colStep,
+      b: pad + scale,
+      c: pad + 2 * scale,
     });
-    expect(l.width).toBe(pad * 2 + 3 * nodeW + 2 * colGap);
-    expect(l.height).toBe(pad * 2 + nodeH);
   });
 
-  it('connects edge endpoints to the node faces it joins', () => {
+  it('positions by weighted start, so a heavy prerequisite pushes its dependent right', () => {
+    const l = layoutDag([
+      { id: 'a', weight: 3 },
+      { id: 'b', dependsOn: ['a'], weight: 1 },
+    ]);
+    const byId = Object.fromEntries(l.nodes.map((n) => [n.id, n]));
+    expect(byId.a.x).toBe(pad);
+    expect(byId.b.x).toBe(pad + 3 * scale); // b starts only after a's 3 units
+    expect(byId.a.w).toBe(wOf(3)); // width encodes weight
+  });
+
+  it('stacks two independent roots in separate lanes at the same x', () => {
+    const l = layoutDag([{ id: 'a' }, { id: 'b' }]);
+    const byId = Object.fromEntries(l.nodes.map((n) => [n.id, n]));
+    expect([byId.a.x, byId.b.x]).toEqual([pad, pad]);
+    expect([byId.a.y, byId.b.y]).toEqual([pad, pad + rowStep]);
+  });
+
+  it('reuses an earlier lane once a node clears the box that held it', () => {
+    // In a → b → c, c starts well past a's right edge, so it folds back onto a's lane rather
+    // than opening a third: the height is two lanes, not three. This lane reuse is what keeps
+    // the graph compact instead of one lane per node.
+    const l = layoutDag([{ id: 'a' }, { id: 'b', dependsOn: ['a'] }, { id: 'c', dependsOn: ['b'] }]);
+    expect(Math.max(...l.nodes.map((n) => n.lane))).toBe(1);
+    expect(l.height).toBe(pad * 2 + 2 * nodeH + rowGap);
+  });
+});
+
+describe('layoutDag float and critical path', () => {
+  // a(1) → b(1) → d(1) is the long chain; a → c(1) → d, but c has slack because the a→b→d
+  // branch is longer than a→c→d? both are length-2 here, so build an asymmetric one:
+  // a(2) → b(2) → d ; a → c(1) → d. The top branch costs 4, the c branch costs 1, so c floats.
+  const g: DagInputNode[] = [
+    { id: 'a', weight: 2 },
+    { id: 'b', weight: 2, dependsOn: ['a'] },
+    { id: 'c', weight: 1, dependsOn: ['a'] },
+    { id: 'd', weight: 1, dependsOn: ['b', 'c'] },
+  ];
+
+  it('marks the longest chain critical and everything off it non-critical', () => {
+    const crit = new Set(layoutDag(g).nodes.filter((n) => n.critical).map((n) => n.id));
+    expect(crit).toEqual(new Set(['a', 'b', 'd']));
+  });
+
+  it('gives a slack node a float bar and a critical node none', () => {
+    const byId = Object.fromEntries(layoutDag(g).nodes.map((n) => [n.id, n]));
+    expect(byId.c.slack).toBeGreaterThan(0);
+    expect(byId.c.floatEndX).toBeGreaterThan(byId.c.x + byId.c.w);
+    expect(byId.b.slack).toBe(0);
+    expect(byId.b.floatEndX).toBe(byId.b.x + byId.b.w); // no bar
+  });
+
+  it('flags the edges of the critical chain and not the others', () => {
+    const e = layoutDag(g).edges;
+    const crit = new Set(e.filter((x) => x.critical).map((x) => `${x.from}${x.to}`));
+    expect(crit).toEqual(new Set(['ab', 'bd']));
+  });
+});
+
+describe('layoutDag edges', () => {
+  it('joins the right face of the source to the left face of the target, no waypoints', () => {
     const l = layoutDag([{ id: 'a' }, { id: 'b', dependsOn: ['a'] }]);
     const e = l.edges[0];
-    expect({ x1: e.x1, x2: e.x2 }).toEqual({ x1: pad + nodeW, x2: pad + colStep });
-    expect(e.back).toBe(false);
+    expect(e).toMatchObject({ from: 'a', to: 'b', x1: pad + wOf(1), x2: pad + scale, back: false });
+    expect('waypoints' in e).toBe(false);
   });
 });
 
@@ -79,48 +128,5 @@ describe('layoutDag cycle safety', () => {
 
   it('returns an empty layout for no nodes', () => {
     expect(layoutDag([])).toEqual({ nodes: [], edges: [], width: 0, height: 0 });
-  });
-});
-
-describe('layoutDag long-edge routing', () => {
-  // a → b → c, plus a long a → c that spans rank 0..2
-  const diamond = [
-    { id: 'a' },
-    { id: 'b', dependsOn: ['a'] },
-    { id: 'c', dependsOn: ['a', 'b'] },
-  ];
-
-  it('leaves adjacent-rank edges straight (no waypoints)', () => {
-    const l = layoutDag(diamond);
-    expect(l.edges.find((e) => e.from === 'a' && e.to === 'b')!.waypoints).toEqual([]);
-  });
-
-  it('threads a 2-rank edge through one waypoint in the middle column', () => {
-    const l = layoutDag(diamond);
-    const long = l.edges.find((e) => e.from === 'a' && e.to === 'c')!;
-    expect(long.waypoints).toHaveLength(1);
-    expect(long.waypoints[0].x).toBe(pad + colStep + nodeW / 2);
-  });
-
-  it('reserves a slot for the waypoint so it dodges the real node in that rank', () => {
-    const l = layoutDag(diamond);
-    const b = l.nodes.find((n) => n.id === 'b')!;
-    const wpY = l.edges.find((e) => e.from === 'a' && e.to === 'c')!.waypoints[0].y;
-    expect(wpY).not.toBe(b.y + nodeH / 2); // routed around b, not through it
-    expect(l.height).toBe(pad * 2 + 2 * nodeH + rowGap); // rank 1 now holds 2 slots
-  });
-
-  it('adds one waypoint per spanned rank', () => {
-    const l = layoutDag([
-      { id: 'a' },
-      { id: 'b', dependsOn: ['a'] },
-      { id: 'c', dependsOn: ['b'] },
-      { id: 'd', dependsOn: ['c', 'a'] },
-    ]);
-    const long = l.edges.find((e) => e.from === 'a' && e.to === 'd')!;
-    expect(long.waypoints.map((w) => w.x)).toEqual([
-      pad + colStep + nodeW / 2,
-      pad + 2 * colStep + nodeW / 2,
-    ]);
   });
 });

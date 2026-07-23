@@ -8,10 +8,12 @@ import pytest
 
 from dod.plankit import render_for
 from dod.planspec import (
+    critical_units,
     cycle_nodes,
     dag_nodes,
     dangling_deps,
     items_of,
+    max_concurrency,
     ready_ids,
     spec_from_plan,
     status_word,
@@ -72,6 +74,42 @@ class TestGraphHealth:
         assert cycle_nodes(items) == []
 
 
+class TestMaxConcurrency:
+    def test_a_chain_has_a_ceiling_of_one(self) -> None:
+        items = [item("a"), item("b", depends_on=["a"]), item("c", depends_on=["b"])]
+        assert max_concurrency(items) == 1
+
+    def test_independent_units_are_all_concurrent(self) -> None:
+        assert max_concurrency([item("a"), item("b"), item("c")]) == 3
+
+    def test_a_diamond_allows_the_two_middle_units_at_once(self) -> None:
+        # a → {b, c} → d: the widest independent set is {b, c}.
+        items = [item("a"), item("b", depends_on=["a"]), item("c", depends_on=["a"]),
+                 item("d", depends_on=["b", "c"])]
+        assert max_concurrency(items) == 2
+
+    def test_a_single_unit_has_a_ceiling_of_one(self) -> None:
+        assert max_concurrency([item("a")]) == 1
+
+
+class TestCriticalUnits:
+    def test_the_only_chain_is_entirely_critical(self) -> None:
+        items = [item("a"), item("b", depends_on=["a"])]
+        assert critical_units(items) == {"a", "b"}
+
+    def test_a_lighter_parallel_branch_has_float_and_is_not_critical(self) -> None:
+        # a(2)→b(2)→d against a→c(1)→d: the b branch is heavier, so c floats.
+        items = [item("a", size="M"), item("b", size="M", depends_on=["a"]),
+                 item("c", size="S", depends_on=["a"]), item("d", size="S", depends_on=["b", "c"])]
+        assert critical_units(items) == {"a", "b", "d"}
+
+    def test_is_derived_from_weight_not_the_plans_own_flag(self) -> None:
+        # The plan marks b critical, but by weight the heavier c is the spine.
+        items = [item("a", size="S"), item("b", size="S", critical=True, depends_on=["a"]),
+                 item("c", size="L", depends_on=["a"])]
+        assert critical_units(items) == {"a", "c"}
+
+
 class TestReadyIds:
     def test_a_not_started_unit_with_every_prerequisite_done_is_ready(self) -> None:
         items = [item("a", status="done"), item("b", depends_on=["a"])]
@@ -98,11 +136,14 @@ class TestDagNodes:
     def test_builds_the_whole_node_in_one_shape(self) -> None:
         got = dag_nodes([item("u1", title="Swept circle", status="pending",
                               track="SIM", size="M", critical=True, depends_on=["u0"])])
+        # Criticality is not in `sub`: the graph draws the critical path in the redline colour,
+        # derived by CPM, so the plan's own `critical` flag does not leak into the label.
         assert got == [{
             "id": "u1",
             "label": "Swept circle",
             "status": "queued",
-            "sub": "SIM · M · critical",
+            "sub": "SIM · M",
+            "weight": 2,
             "dependsOn": ["u0"],
         }]
 
@@ -140,6 +181,10 @@ class TestSpecFromPlan:
         assert stats["units"]["sub"] == "1 done"
         assert stats["ready now"]["value"] == 1        # only b
         assert stats["phases"]["value"] == 2
+        # a → b → c is a chain: nothing is concurrent, and the whole chain is the spine.
+        assert stats["max parallel"]["value"] == 1
+        assert stats["critical path"]["value"] == 3
+        assert stats["critical path"]["sub"] == "6 u"  # M+L+S weighted
         prog = panels_of(spec, "progress")[0]
         assert (prog["value"], prog["max"]) == (2, 6)  # M done of M+L+S
 

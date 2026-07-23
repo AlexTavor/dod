@@ -26,25 +26,21 @@ const BUCKET_LEGEND: ReadonlyArray<readonly [Bucket, string]> = [
 
 const colorOf = (status?: string): string => BUCKET_COLOR[bucketOf(status)];
 
-/** A left-to-right spline from the source face through each waypoint to the target face. */
+/** A left-to-right cubic from the source face to the target face; the horizontal handles keep
+ *  the curve flat where it leaves and enters a node, so parallel edges read as a bundle. */
 function edgePath(e: PlacedEdge): string {
-  const pts = [{ x: e.x1, y: e.y1 }, ...e.waypoints, { x: e.x2, y: e.y2 }];
-  let d = `M${pts[0].x},${pts[0].y}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i];
-    const b = pts[i + 1];
-    const h = Math.max(24, Math.abs(b.x - a.x) / 2);
-    d += ` C${a.x + h},${a.y} ${b.x - h},${b.y} ${b.x},${b.y}`;
-  }
-  return d;
+  const h = Math.max(24, Math.abs(e.x2 - e.x1) / 2);
+  return `M${e.x1},${e.y1} C${e.x1 + h},${e.y1} ${e.x2 - h},${e.y2} ${e.x2},${e.y2}`;
 }
 
 /**
- * The `dag` atom: a layered fix-dependency graph. Each node is a remediation unit coloured by
- * status; an edge runs prerequisite → dependent. Units that can start now (not begun, every
- * prerequisite done) get a "ready" ring. Hover a node to highlight its lineage. Holds only
- * hover state across render polls. Light DOM. Geometry comes from dag-layout and the graph
- * derivations from dag-model; this element only places and paints.
+ * The `dag` atom: a dependency graph on an earliest-start axis. A node sits where it could
+ * begin (the weighted length of the longest chain behind it), coloured by status; an edge runs
+ * prerequisite → dependent. Units that can start now (not begun, every prerequisite done) get a
+ * "ready" ring; the zero-float critical path is drawn in the redline colour; a float rail
+ * trails each node that can slip. Hover highlights lineage. Holds only hover state across
+ * render polls. Light DOM. Geometry comes from dag-layout, graph derivations from dag-model;
+ * this element only places and paints.
  */
 @customElement('dk-dag')
 export class DkDag extends LitElement {
@@ -66,6 +62,8 @@ export class DkDag extends LitElement {
         ([bucket, label]) => html`<span><i style="background:${BUCKET_COLOR[bucket]}"></i>${label}</span>`,
       )}
       <span><i class="dk-dag-elig-key"></i>ready now</span>
+      <span><i class="dk-dag-crit-key"></i>critical path</span>
+      <span><i class="dk-dag-float-key"></i>float</span>
     </div>`;
   }
 
@@ -77,7 +75,7 @@ export class DkDag extends LitElement {
     }
 
     const layout = layoutDag(
-      nodes.map((n) => ({ id: n.id, dependsOn: n.dependsOn })),
+      nodes.map((n) => ({ id: n.id, dependsOn: n.dependsOn, weight: n.weight })),
       this.panel.edges,
     );
     const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -88,9 +86,21 @@ export class DkDag extends LitElement {
     const ready = frontier(nodes, adj.up);
     const lit = this.hover ? lineage(this.hover, adj) : null;
 
+    // Float bars sit behind the nodes: a rail from a unit's right face to its latest finish,
+    // so how far it can slip reads at a glance. Zero-float (critical) units have no bar.
+    const floatParts: SVGTemplateResult[] = layout.nodes
+      .filter((pn) => pn.floatEndX > pn.x + pn.w + 1)
+      .map((pn) => {
+        const dim = lit ? !lit.has(pn.id) : false;
+        return svg`<rect
+          class=${`dk-dag-float${dim ? ' dim' : ''}`}
+          x=${pn.x + pn.w} y=${pn.y + pn.h / 2 - 3}
+          width=${pn.floatEndX - (pn.x + pn.w)} height="6" rx="3"></rect>`;
+      });
+
     const edgeParts: SVGTemplateResult[] = layout.edges.map((e) => {
       const on = lit ? lit.has(e.from) && lit.has(e.to) : false;
-      const cls = `dk-dag-edge${on ? ' on' : ''}${e.back ? ' back' : ''}`;
+      const cls = `dk-dag-edge${on ? ' on' : ''}${e.back ? ' back' : ''}${e.critical ? ' crit' : ''}`;
       return svg`<path class=${cls} d=${edgePath(e)} marker-end="url(#dk-arrow)"></path>`;
     });
 
@@ -100,16 +110,12 @@ export class DkDag extends LitElement {
       const elig = ready.has(pn.id);
       const dim = lit ? !lit.has(pn.id) : false;
       const act = n.action;
-      const cls = `dk-dag-node${dim ? ' dim' : ''}${act ? ' act' : ''}`;
+      const cls = `dk-dag-node${dim ? ' dim' : ''}${act ? ' act' : ''}${pn.critical ? ' crit' : ''}`;
+      const chars = Math.max(4, Math.floor((pn.w - 22) / 6.2));
       return svg`<g
         class=${cls}
+        data-id=${pn.id}
         transform=${`translate(${pn.x},${pn.y})`}
-        @mouseenter=${() => {
-          this.hover = pn.id;
-        }}
-        @mouseleave=${() => {
-          this.hover = null;
-        }}
         @click=${() => {
           if (act) this.onAction?.(act, n.payload ?? { id: pn.id });
         }}
@@ -117,14 +123,20 @@ export class DkDag extends LitElement {
         <rect class=${`dk-dag-box${elig ? ' elig' : ''}`} width=${pn.w} height=${pn.h} rx="8"></rect>
         <rect class="dk-dag-tone" x="0" y="0" width="4" height=${pn.h} rx="2" fill=${col}></rect>
         <circle cx=${pn.w - 12} cy="13" r="4" fill=${col}></circle>
-        <text class="dk-dag-lbl" x="13" y="18">${trunc(n.label ?? pn.id, 19)}</text>
-        <text class="dk-dag-sub" x="13" y="33">${trunc(n.sub ?? (elig ? 'ready' : n.status ?? ''), 22)}</text>
+        <text class="dk-dag-lbl" x="13" y="18">${trunc(n.label ?? pn.id, chars)}</text>
+        <text class="dk-dag-sub" x="13" y="33">${trunc(n.sub ?? (elig ? 'ready' : n.status ?? ''), chars + 3)}</text>
       </g>`;
     });
 
     return html`<div class="dk-panel dk-full">
       ${title}${this.legend()}
-      <div class="dk-dag-scroll">
+      <div
+        class="dk-dag-scroll"
+        @mouseover=${(ev: MouseEvent) => this.onHover(ev)}
+        @mouseleave=${() => {
+          this.hover = null;
+        }}
+      >
         <svg
           class="dk-dag"
           width=${layout.width}
@@ -136,11 +148,21 @@ export class DkDag extends LitElement {
               <path class="dk-dag-arrowhead" d="M0,0 L8,4 L0,8 z"></path>
             </marker>
           </defs>
+          <g class="dk-dag-floats">${floatParts}</g>
           <g class="dk-dag-edges">${edgeParts}</g>
           <g class="dk-dag-nodes">${nodeParts}</g>
         </svg>
       </div>
     </div>`;
+  }
+
+  /** Hover is delegated to the scroll container, which survives a re-render, so the
+   *  mouseleave that clears the highlight always fires even though `render` rebuilds every
+   *  node group on each poll. Binding per-node would drop the leave and the highlight sticks. */
+  private onHover(ev: MouseEvent): void {
+    const g = (ev.target as Element | null)?.closest?.('g.dk-dag-node') as SVGGElement | null;
+    const id = g?.getAttribute('data-id') ?? null;
+    if (id !== this.hover) this.hover = id;
   }
 }
 

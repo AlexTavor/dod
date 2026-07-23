@@ -56,12 +56,24 @@ describe('dk-dag', () => {
 
   it('dims nodes outside the hovered node lineage', async () => {
     const el = await makeDag(panel);
-    nodeById(el, 'b').dispatchEvent(new MouseEvent('mouseenter'));
+    // Hover is delegated to the scroll container (so it survives a re-render), so the event
+    // must bubble from a node up to that container, as a real pointer move does.
+    nodeById(el, 'b').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
     await el.updateComplete;
     // b's lineage is a (up) and d (down); c is unrelated → dimmed
     expect(nodeById(el, 'c').classList.contains('dim')).toBe(true);
     expect(nodeById(el, 'a').classList.contains('dim')).toBe(false);
     expect(nodeById(el, 'd').classList.contains('dim')).toBe(false);
+    el.remove();
+  });
+
+  it('clears the highlight when the pointer leaves the graph', async () => {
+    const el = await makeDag(panel);
+    nodeById(el, 'b').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    await el.updateComplete;
+    el.querySelector('.dk-dag-scroll')!.dispatchEvent(new MouseEvent('mouseleave'));
+    await el.updateComplete;
+    expect(el.querySelectorAll('.dk-dag-node.dim').length).toBe(0);
     el.remove();
   });
 
