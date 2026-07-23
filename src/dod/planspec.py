@@ -125,8 +125,45 @@ def weight_of(item: dict[str, Any]) -> int:
     return SIZE_WEIGHT.get(str(item.get("size", "")).upper(), 1)
 
 
-def dag_nodes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One dag node per unit, in plan order."""
+def _detail(item: dict[str, Any], phases: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """The inspector payload for one unit: scannable facts, the brief, and references to zoom
+    into. The phase resolves to its goal and exit criteria; a `delivers` entry (present in some
+    producers, not PDD plans) becomes a source link. Waits-on / unblocks are not here -- the
+    atom derives those from the graph so its chips can re-select."""
+    facts: list[dict[str, str]] = []
+    ph = str(item.get("phase") or "")
+    pinfo = phases.get(ph, {})
+    if ph:
+        name = str(pinfo.get("name") or "")
+        facts.append({"k": "phase", "v": f"{ph}: {name}" if name else ph})
+    facts += [{"k": k, "v": str(item[k])} for k in ("track", "size", "risk") if item.get(k)]
+    facts.append({"k": "by", "v": "agent" if item.get("agentic") else "human call"})
+
+    refs: list[dict[str, str]] = []
+    if pinfo.get("goal"):
+        refs.append({"label": f"Phase {ph} goal", "text": str(pinfo["goal"])})
+    if pinfo.get("exit_criteria"):
+        refs.append({"label": "Exit criteria", "text": str(pinfo["exit_criteria"])})
+    for d in item.get("delivers") or []:
+        if isinstance(d, dict) and d.get("pr"):
+            ref: dict[str, str] = {"label": f"PR #{d['pr']}"}
+            if isinstance(d.get("url"), str):
+                ref["href"] = d["url"]
+            refs.append(ref)
+
+    detail: dict[str, Any] = {"facts": facts}
+    if item.get("note"):
+        detail["note"] = str(item["note"])
+    if refs:
+        detail["refs"] = refs
+    return detail
+
+
+def dag_nodes(
+    items: list[dict[str, Any]], phases: list[dict[str, Any]] | None = None
+) -> list[dict[str, Any]]:
+    """One dag node per unit, in plan order, each carrying its inspector detail."""
+    by_phase = {str(p.get("id")): p for p in (phases or []) if isinstance(p, dict)}
     return [
         {
             "id": str(i["id"]),
@@ -135,6 +172,7 @@ def dag_nodes(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "sub": _sub(i),
             "weight": weight_of(i),
             "dependsOn": deps_of(i),
+            "detail": _detail(i, by_phase),
         }
         for i in items
     ]
@@ -231,7 +269,7 @@ def spec_from_plan(plan: dict[str, Any], repo: str = "") -> dict[str, Any]:
         {"type": "progress", "label": "plan complete (size-weighted)",
          "value": done_weight, "max": weight},
         {"type": "dag", "id": "plan", "title": "dependency graph",
-         "nodes": dag_nodes(items)},
+         "nodes": dag_nodes(items, plan.get("phases") or [])},
     ]
 
     if ready:

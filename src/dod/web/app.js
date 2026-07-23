@@ -12,49 +12,86 @@
       <rect x=${n.l} y=${i+3} width=${c} height=${16} fill=${H(0)}></rect>
       <text class="dk-cval" x=${n.l+c+6} y=${i+22/2+4}>${Ye(Number(t)||0)}</text>`)}),O`<svg viewBox="0 0 ${820} ${i}">${s}</svg>`}function nt(e){let t=e.kind??`line`,n=e.series??(e.values?[{name:e.label??``,values:e.values}]:[]),r=e.x??(n[0]?n[0].values.map((e,t)=>t):[]),i=n[0]?.values??[],a;return a=t===`spark`?Ze(i,H(e.color??0)):t===`diverging`?et(r,i,e.left,e.right):t===`hbar`?tt(r,i):$e(t===`bars`?`bar`:t===`stacked`?`stacked`:t===`area`?`area`:`line`,r,n,e.markers),O`<div class="dk-panel dk-chart ${t===`spark`?``:`dk-full`}">
     ${e.title?O`<div class="dk-l">${e.title}</div>`:``}${a}
-  </div>`}var rt={nodeH:42,minW:88,scale:96,gap:12,rowGap:14,pad:16};function it(e,t=[]){let n=new Set(e.map(e=>e.id)),r=new Set,i=[],a=(e,t)=>{if(e===t||!n.has(e)||!n.has(t))return;let a=`${e} ${t}`;r.has(a)||(r.add(a),i.push({from:e,to:t}))};for(let e of t)a(e.from,e.to);for(let t of e)for(let e of t.dependsOn??[])a(e,t.id);return i}function at(e,t){let n=new Map,r=new Map;for(let t of e)n.set(t,0),r.set(t,[]);for(let e of t)r.get(e.from).push(e.to),n.set(e.to,n.get(e.to)+1);let i=new Map,a=e.filter(e=>n.get(e)===0);for(let e of a)i.set(e,0);let o=0;for(;a.length;){let e=[];for(let t of a){o++;let a=i.get(t);for(let o of r.get(t)){i.set(o,Math.max(i.get(o)??0,a+1));let t=n.get(o)-1;n.set(o,t),t===0&&e.push(o)}}a=e}if(o<e.length){let t=0;for(let e of i.values())t=Math.max(t,e);for(let n of e)i.has(n)||i.set(n,t+1)}return i}function ot(e,t,n,r){let i=new Map,a=new Map;for(let t of e)i.set(t,[]),a.set(t,[]);for(let e of t)n.get(e.to)>n.get(e.from)&&(a.get(e.from).push(e.to),i.get(e.to).push(e.from));let o=[...e].sort((e,t)=>n.get(e)-n.get(t)),s=new Map;for(let e of o)s.set(e,Math.max(0,...i.get(e).map(e=>s.get(e)+r(e))));let c=Math.max(0,...e.map(e=>s.get(e)+r(e))),l=new Map,u=new Map;for(let e of[...o].reverse()){let t=a.get(e).length?Math.min(...a.get(e).map(e=>l.get(e)-r(e))):c;l.set(e,t),u.set(e,Math.max(0,t-r(e)-s.get(e)))}return{asap:s,slack:u}}function st(e,t,n){let r=(t.get(e)??[]).map(e=>n.get(e)).filter(e=>e!=null);return r.length?r.reduce((e,t)=>e+t,0)/r.length:n.get(e)??0}function ct(e,t=[],n={}){let r={...rt,...n};if(!e.length)return{nodes:[],edges:[],width:0,height:0};let i=e.map(e=>e.id),a=it(e,t),o=at(i,a),s=new Map(e.map(e=>[e.id,Number.isFinite(e.weight)?Number(e.weight):1])),c=e=>Math.max(.1,s.get(e)??1),{asap:l,slack:u}=ot(i,a,o,c),d=r.nodeH+r.rowGap,f=e=>r.pad+l.get(e)*r.scale,p=e=>Math.max(r.minW,c(e)*r.scale-r.gap),m=new Map(i.map(e=>[e,[]]));for(let e of a)o.get(e.to)>o.get(e.from)&&m.get(e.to).push(e.from);let h=new Map,g=(e,t)=>{h.clear();let n=[];for(let i of e){let e=f(i),a=t(i),o=-1,s=1/0;for(let t=0;t<n.length;t++)n[t]<=e-r.gap&&Math.abs(t-a)<s&&(s=Math.abs(t-a),o=t);o===-1&&(o=n.length,n.push(0)),n[o]=e+p(i),h.set(i,o)}},ee=e=>(t,n)=>f(t)-f(n)||e(t)-e(n)||t.localeCompare(n);g([...i].sort(ee(()=>0)),()=>0);let te=new Map(h);g([...i].sort(ee(e=>st(e,m,te))),e=>st(e,m,te));let _=i.map(e=>{let t=f(e),n=p(e),i=u.get(e);return{id:e,rank:o.get(e),lane:h.get(e),x:t,y:r.pad+h.get(e)*d,w:n,h:r.nodeH,slack:Math.round(i*100)/100,floatEndX:t+n+i*r.scale,critical:i<.01}}),v=new Set(_.filter(e=>e.critical).map(e=>e.id)),y=e=>r.pad+h.get(e)*d+r.nodeH/2,ne=a.map(e=>({from:e.from,to:e.to,x1:f(e.from)+p(e.from),y1:y(e.from),x2:f(e.to),y2:y(e.to),back:o.get(e.from)>=o.get(e.to),critical:v.has(e.from)&&v.has(e.to)})),b=Math.max(1,..._.map(e=>e.lane+1));return{nodes:_,edges:ne,width:Math.max(0,..._.map(e=>Math.max(e.x+e.w,e.floatEndX)))+r.pad,height:r.pad*2+b*r.nodeH+(b-1)*r.rowGap}}var lt={queued:{bucket:`idle`,satisfies:!1,notBegun:!0},pending:{bucket:`idle`,satisfies:!1,notBegun:!0},planning:{bucket:`active`,satisfies:!1,notBegun:!1},"in-cycle":{bucket:`active`,satisfies:!1,notBegun:!1},"in-progress":{bucket:`active`,satisfies:!1,notBegun:!1},green:{bucket:`good`,satisfies:!0,notBegun:!1},landed:{bucket:`good`,satisfies:!0,notBegun:!1},committed:{bucket:`good`,satisfies:!0,notBegun:!1},done:{bucket:`good`,satisfies:!0,notBegun:!1},blocked:{bucket:`warn`,satisfies:!1,notBegun:!1},"needs-hitl":{bucket:`warn`,satisfies:!1,notBegun:!1},error:{bucket:`err`,satisfies:!1,notBegun:!1}},ut={bucket:`idle`,satisfies:!1,notBegun:!1},dt=e=>lt[(e??``).toLowerCase()]??ut,ft=e=>dt(e).bucket,pt=e=>dt(e).satisfies,mt=e=>dt(e).notBegun;function ht(e,t){let n=new Map,r=new Map;for(let t of e)n.set(t,[]),r.set(t,[]);for(let e of t)!n.has(e.from)||!n.has(e.to)||(r.get(e.from).push(e.to),n.get(e.to).push(e.from));return{up:n,down:r}}function gt(e,t){let n=new Set,r=[e];for(;r.length;){let e=r.pop();for(let i of t.get(e)??[])n.has(i)||(n.add(i),r.push(i))}return n}function _t(e,t){return new Set([e,...gt(e,t.up),...gt(e,t.down)])}function vt(e,t){let n=new Set(e.filter(e=>pt(e.status)).map(e=>e.id)),r=new Set;for(let i of e)mt(i.status)&&(t.get(i.id)??[]).every(e=>n.has(e))&&r.add(i.id);return r}function G(e,t,n,r){var i=arguments.length,a=i<3?t:r===null?r=Object.getOwnPropertyDescriptor(t,n):r,o;if(typeof Reflect==`object`&&typeof Reflect.decorate==`function`)a=Reflect.decorate(e,t,n,r);else for(var s=e.length-1;s>=0;s--)(o=e[s])&&(a=(i<3?o(a):i>3?o(t,n,a):o(t,n))||a);return i>3&&a&&Object.defineProperty(t,n,a),a}var yt={idle:`var(--dk-muted)`,active:`var(--dk-accent)`,good:`var(--dk-ok)`,warn:`var(--dk-warn)`,err:`var(--dk-err)`},bt=[[`idle`,`queued`],[`active`,`in progress`],[`good`,`done`],[`warn`,`blocked`],[`err`,`error`]],xt=e=>yt[ft(e)];function St(e){let t=Math.max(24,Math.abs(e.x2-e.x1)/2);return`M${e.x1},${e.y1} C${e.x1+t},${e.y1} ${e.x2-t},${e.y2} ${e.x2},${e.y2}`}var K=class extends I{constructor(...e){super(...e),this.panel={type:`dag`},this.hover=null}createRenderRoot(){return this}nodes(){return(this.panel.nodes??[]).filter(e=>!!e&&e.id!=null)}legend(){return O`<div class="dk-legend dk-dag-legend">
+  </div>`}var rt={nodeH:42,minW:88,scale:96,gap:12,rowGap:14,pad:16};function it(e,t=[]){let n=new Set(e.map(e=>e.id)),r=new Set,i=[],a=(e,t)=>{if(e===t||!n.has(e)||!n.has(t))return;let a=`${e} ${t}`;r.has(a)||(r.add(a),i.push({from:e,to:t}))};for(let e of t)a(e.from,e.to);for(let t of e)for(let e of t.dependsOn??[])a(e,t.id);return i}function at(e,t){let n=new Map,r=new Map;for(let t of e)n.set(t,0),r.set(t,[]);for(let e of t)r.get(e.from).push(e.to),n.set(e.to,n.get(e.to)+1);let i=new Map,a=e.filter(e=>n.get(e)===0);for(let e of a)i.set(e,0);let o=0;for(;a.length;){let e=[];for(let t of a){o++;let a=i.get(t);for(let o of r.get(t)){i.set(o,Math.max(i.get(o)??0,a+1));let t=n.get(o)-1;n.set(o,t),t===0&&e.push(o)}}a=e}if(o<e.length){let t=0;for(let e of i.values())t=Math.max(t,e);for(let n of e)i.has(n)||i.set(n,t+1)}return i}function ot(e,t,n,r){let i=new Map,a=new Map;for(let t of e)i.set(t,[]),a.set(t,[]);for(let e of t)n.get(e.to)>n.get(e.from)&&(a.get(e.from).push(e.to),i.get(e.to).push(e.from));let o=[...e].sort((e,t)=>n.get(e)-n.get(t)),s=new Map;for(let e of o)s.set(e,Math.max(0,...i.get(e).map(e=>s.get(e)+r(e))));let c=Math.max(0,...e.map(e=>s.get(e)+r(e))),l=new Map,u=new Map;for(let e of[...o].reverse()){let t=a.get(e).length?Math.min(...a.get(e).map(e=>l.get(e)-r(e))):c;l.set(e,t),u.set(e,Math.max(0,t-r(e)-s.get(e)))}return{asap:s,slack:u}}function st(e,t,n){let r=(t.get(e)??[]).map(e=>n.get(e)).filter(e=>e!=null);return r.length?r.reduce((e,t)=>e+t,0)/r.length:n.get(e)??0}function ct(e,t=[],n={}){let r={...rt,...n};if(!e.length)return{nodes:[],edges:[],width:0,height:0};let i=e.map(e=>e.id),a=it(e,t),o=at(i,a),s=new Map(e.map(e=>[e.id,Number.isFinite(e.weight)?Number(e.weight):1])),c=e=>Math.max(.1,s.get(e)??1),{asap:l,slack:u}=ot(i,a,o,c),d=r.nodeH+r.rowGap,f=e=>r.pad+l.get(e)*r.scale,p=e=>Math.max(r.minW,c(e)*r.scale-r.gap),m=new Map(i.map(e=>[e,[]]));for(let e of a)o.get(e.to)>o.get(e.from)&&m.get(e.to).push(e.from);let h=new Map,g=(e,t)=>{h.clear();let n=[];for(let i of e){let e=f(i),a=t(i),o=-1,s=1/0;for(let t=0;t<n.length;t++)n[t]<=e-r.gap&&Math.abs(t-a)<s&&(s=Math.abs(t-a),o=t);o===-1&&(o=n.length,n.push(0)),n[o]=e+p(i),h.set(i,o)}},ee=e=>(t,n)=>f(t)-f(n)||e(t)-e(n)||t.localeCompare(n);g([...i].sort(ee(()=>0)),()=>0);let te=new Map(h);g([...i].sort(ee(e=>st(e,m,te))),e=>st(e,m,te));let _=i.map(e=>{let t=f(e),n=p(e),i=u.get(e);return{id:e,rank:o.get(e),lane:h.get(e),x:t,y:r.pad+h.get(e)*d,w:n,h:r.nodeH,slack:Math.round(i*100)/100,floatEndX:t+n+i*r.scale,critical:i<.01}}),v=new Set(_.filter(e=>e.critical).map(e=>e.id)),y=e=>r.pad+h.get(e)*d+r.nodeH/2,ne=a.map(e=>({from:e.from,to:e.to,x1:f(e.from)+p(e.from),y1:y(e.from),x2:f(e.to),y2:y(e.to),back:o.get(e.from)>=o.get(e.to),critical:v.has(e.from)&&v.has(e.to)})),b=Math.max(1,..._.map(e=>e.lane+1));return{nodes:_,edges:ne,width:Math.max(0,..._.map(e=>Math.max(e.x+e.w,e.floatEndX)))+r.pad,height:r.pad*2+b*r.nodeH+(b-1)*r.rowGap}}var lt={queued:{bucket:`idle`,satisfies:!1,notBegun:!0},pending:{bucket:`idle`,satisfies:!1,notBegun:!0},planning:{bucket:`active`,satisfies:!1,notBegun:!1},"in-cycle":{bucket:`active`,satisfies:!1,notBegun:!1},"in-progress":{bucket:`active`,satisfies:!1,notBegun:!1},green:{bucket:`good`,satisfies:!0,notBegun:!1},landed:{bucket:`good`,satisfies:!0,notBegun:!1},committed:{bucket:`good`,satisfies:!0,notBegun:!1},done:{bucket:`good`,satisfies:!0,notBegun:!1},blocked:{bucket:`warn`,satisfies:!1,notBegun:!1},"needs-hitl":{bucket:`warn`,satisfies:!1,notBegun:!1},error:{bucket:`err`,satisfies:!1,notBegun:!1}},ut={bucket:`idle`,satisfies:!1,notBegun:!1},dt=e=>lt[(e??``).toLowerCase()]??ut,ft=e=>dt(e).bucket,pt=e=>dt(e).satisfies,mt=e=>dt(e).notBegun;function ht(e,t){let n=new Map,r=new Map;for(let t of e)n.set(t,[]),r.set(t,[]);for(let e of t)!n.has(e.from)||!n.has(e.to)||(r.get(e.from).push(e.to),n.get(e.to).push(e.from));return{up:n,down:r}}function gt(e,t){let n=new Set,r=[e];for(;r.length;){let e=r.pop();for(let i of t.get(e)??[])n.has(i)||(n.add(i),r.push(i))}return n}function _t(e,t){return new Set([e,...gt(e,t.up),...gt(e,t.down)])}function vt(e,t){let n=new Set(e.filter(e=>pt(e.status)).map(e=>e.id)),r=new Set;for(let i of e)mt(i.status)&&(t.get(i.id)??[]).every(e=>n.has(e))&&r.add(i.id);return r}function G(e,t,n,r){var i=arguments.length,a=i<3?t:r===null?r=Object.getOwnPropertyDescriptor(t,n):r,o;if(typeof Reflect==`object`&&typeof Reflect.decorate==`function`)a=Reflect.decorate(e,t,n,r);else for(var s=e.length-1;s>=0;s--)(o=e[s])&&(a=(i<3?o(a):i>3?o(t,n,a):o(t,n))||a);return i>3&&a&&Object.defineProperty(t,n,a),a}var yt={idle:`var(--dk-muted)`,active:`var(--dk-accent)`,good:`var(--dk-ok)`,warn:`var(--dk-warn)`,err:`var(--dk-err)`},bt=[[`idle`,`queued`],[`active`,`in progress`],[`good`,`done`],[`warn`,`blocked`],[`err`,`error`]],xt=e=>yt[ft(e)];function St(e){let t=Math.max(24,Math.abs(e.x2-e.x1)/2);return`M${e.x1},${e.y1} C${e.x1+t},${e.y1} ${e.x2-t},${e.y2} ${e.x2},${e.y2}`}var K=class extends I{constructor(...e){super(...e),this.panel={type:`dag`},this.hover=null,this.sel=null}createRenderRoot(){return this}nodes(){return(this.panel.nodes??[]).filter(e=>!!e&&e.id!=null)}legend(){return O`<div class="dk-legend dk-dag-legend">
       ${bt.map(([e,t])=>O`<span><i style="background:${yt[e]}"></i>${t}</span>`)}
       <span><i class="dk-dag-elig-key"></i>ready now</span>
       <span><i class="dk-dag-crit-key"></i>critical path</span>
       <span><i class="dk-dag-float-key"></i>float</span>
-    </div>`}render(){let e=this.nodes(),t=this.panel.title?O`<div class="dk-l">${this.panel.title}</div>`:``;if(!e.length)return O`<div class="dk-panel dk-full">${t}<div class="dk-muted">no units to show</div></div>`;let n=ct(e.map(e=>({id:e.id,dependsOn:e.dependsOn,weight:e.weight})),this.panel.edges),r=new Map(e.map(e=>[e.id,e])),i=ht(e.map(e=>e.id),n.edges),a=vt(e,i.up),o=this.hover?_t(this.hover,i):null,s=n.nodes.filter(e=>e.floatEndX>e.x+e.w+1).map(e=>k`<rect
+    </div>`}render(){let e=this.nodes(),t=this.panel.title?O`<div class="dk-l">${this.panel.title}</div>`:``;if(!e.length)return O`<div class="dk-panel dk-full">${t}<div class="dk-muted">no units to show</div></div>`;let n=ct(e.map(e=>({id:e.id,dependsOn:e.dependsOn,weight:e.weight})),this.panel.edges),r=new Map(e.map(e=>[e.id,e])),i=ht(e.map(e=>e.id),n.edges),a=vt(e,i.up),o=this.hover?_t(this.hover,i):null,s=this.sel&&r.has(this.sel)?this.sel:null,c=n.nodes.filter(e=>e.floatEndX>e.x+e.w+1).map(e=>k`<rect
           class=${`dk-dag-float${o&&!o.has(e.id)?` dim`:``}`}
           x=${e.x+e.w} y=${e.y+e.h/2-3}
-          width=${e.floatEndX-(e.x+e.w)} height="6" rx="3"></rect>`),c=n.edges.map(e=>k`<path class=${`dk-dag-edge${o&&o.has(e.from)&&o.has(e.to)?` on`:``}${e.back?` back`:``}${e.critical?` crit`:``}`} d=${St(e)} marker-end="url(#dk-arrow)"></path>`),l=n.nodes.map(e=>{let t=r.get(e.id),n=xt(t.status),i=a.has(e.id),s=o?!o.has(e.id):!1,c=t.action,l=`dk-dag-node${s?` dim`:``}${c?` act`:``}${e.critical?` crit`:``}`,u=Math.max(4,Math.floor((e.w-22)/6.2));return k`<g
-        class=${l}
+          width=${e.floatEndX-(e.x+e.w)} height="6" rx="3"></rect>`),l=n.edges.map(e=>k`<path class=${`dk-dag-edge${o&&o.has(e.from)&&o.has(e.to)?` on`:``}${e.back?` back`:``}${e.critical?` crit`:``}`} d=${St(e)} marker-end="url(#dk-arrow)"></path>`),u=n.nodes.map(e=>{let t=r.get(e.id),n=xt(t.status),i=a.has(e.id),c=o?!o.has(e.id):!1,l=t.action,u=s===e.id,d=`dk-dag-node act${c?` dim`:``}${e.critical?` crit`:``}${u?` sel`:``}`,f=Math.max(4,Math.floor((e.w-22)/6.2));return k`<g
+        class=${d}
         data-id=${e.id}
         transform=${`translate(${e.x},${e.y})`}
-        @click=${()=>{c&&this.onAction?.(c,t.payload??{id:e.id})}}
+        @click=${()=>{this.sel=e.id,l&&this.onAction?.(l,t.payload??{id:e.id})}}
       >
         <rect class=${`dk-dag-box${i?` elig`:``}`} width=${e.w} height=${e.h} rx="8"></rect>
         <rect class="dk-dag-tone" x="0" y="0" width="4" height=${e.h} rx="2" fill=${n}></rect>
         <circle cx=${e.w-12} cy="13" r="4" fill=${n}></circle>
-        <text class="dk-dag-lbl" x="13" y="18">${W(t.label??e.id,u)}</text>
-        <text class="dk-dag-sub" x="13" y="33">${W(t.sub??(i?`ready`:t.status??``),u+3)}</text>
+        <text class="dk-dag-lbl" x="13" y="18">${W(t.label??e.id,f)}</text>
+        <text class="dk-dag-sub" x="13" y="33">${W(t.sub??(i?`ready`:t.status??``),f+3)}</text>
       </g>`});return O`<div class="dk-panel dk-full">
       ${t}${this.legend()}
-      <div
-        class="dk-dag-scroll"
-        @mouseover=${e=>this.onHover(e)}
-        @mouseleave=${()=>{this.hover=null}}
-      >
-        <svg
-          class="dk-dag"
-          width=${n.width}
-          height=${n.height}
-          viewBox="0 0 ${n.width} ${n.height}"
+      <div class="dk-dag-body">
+        <div
+          class="dk-dag-scroll"
+          @mouseover=${e=>this.onHover(e)}
+          @mouseleave=${()=>{this.hover=null}}
         >
-          <defs>
-            <marker id="dk-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
-              <path class="dk-dag-arrowhead" d="M0,0 L8,4 L0,8 z"></path>
-            </marker>
-          </defs>
-          <g class="dk-dag-floats">${s}</g>
-          <g class="dk-dag-edges">${c}</g>
-          <g class="dk-dag-nodes">${l}</g>
-        </svg>
+          <svg
+            class="dk-dag"
+            width=${n.width}
+            height=${n.height}
+            viewBox="0 0 ${n.width} ${n.height}"
+          >
+            <defs>
+              <marker id="dk-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+                <path class="dk-dag-arrowhead" d="M0,0 L8,4 L0,8 z"></path>
+              </marker>
+            </defs>
+            <g class="dk-dag-floats">${c}</g>
+            <g class="dk-dag-edges">${l}</g>
+            <g class="dk-dag-nodes">${u}</g>
+          </svg>
+        </div>
+        ${this.inspector(s,r,i,a)}
       </div>
-    </div>`}onHover(e){let t=(e.target?.closest?.(`g.dk-dag-node`))?.getAttribute(`data-id`)??null;t!==this.hover&&(this.hover=t)}};G([R({attribute:!1})],K.prototype,`panel`,void 0),G([R({attribute:!1})],K.prototype,`onAction`,void 0),G([z()],K.prototype,`hover`,void 0),K=G([L(`dk-dag`)],K);var q=class extends I{constructor(...e){super(...e),this.panel={type:`form`},this.values={},this.dirty=!1}createRenderRoot(){return this}willUpdate(e){if(e.has(`panel`)&&!this.dirty){let e={};for(let t of this.panel.fields??[])e[t.key]=t.value??(t.kind===`checkbox`?!1:``);this.values=e}}set(e,t){this.values={...this.values,[e]:t},this.dirty=!0}field(e){let t=this.values[e.key],n=O`<span class="dk-fl">${e.label??e.key}</span>`;return e.kind===`textarea`?O`<label class="dk-f dk-full"
+    </div>`}inspector(e,t,n,r){if(!e)return O`<aside class="dk-dag-insp empty">
+        <div class="dk-dag-insp-hint">Select a unit to see its detail.</div>
+      </aside>`;let i=t.get(e),a=i.detail??{},o=e=>O`<button
+        class="dk-dag-chip"
+        title=${t.get(e)?.label??e}
+        @click=${()=>{this.sel=e}}
+      >${e}</button>`,s=n.up.get(e)??[],c=n.down.get(e)??[],l=r.has(e),u=l?`ready now`:i.status??`unknown`,d=l?`var(--dk-ready)`:xt(i.status);return O`<aside class="dk-dag-insp">
+      <div class="dk-dag-insp-head">
+        <span class="dk-dag-insp-id">${e}</span>
+        <button class="dk-dag-insp-x" title="Close" @click=${()=>this.sel=null}>×</button>
+      </div>
+      <div class="dk-dag-insp-title">${i.label??e}</div>
+      <div class="dk-dag-insp-chips">
+        <span class="dk-dag-state" style="color:${d};border-color:${d}">${u}</span>
+      </div>
+      ${a.facts&&a.facts.length?O`<dl class="dk-dag-facts">
+            ${a.facts.map(e=>O`<div><dt>${e.k}</dt><dd>${e.v}</dd></div>`)}
+          </dl>`:``}
+      ${a.note?O`<p class="dk-dag-insp-note">${a.note}</p>`:``}
+      ${a.refs&&a.refs.length?O`<div class="dk-dag-insp-sec">
+            <div class="dk-l">sources</div>
+            ${a.refs.map(e=>O`<div class="dk-dag-ref">
+                ${e.href?O`<a href=${e.href} target="_blank" rel="noopener noreferrer">${e.label}</a>`:O`<span class="dk-dag-ref-l">${e.label}</span>`}
+                ${e.text?O`<div class="dk-dag-ref-t">${e.text}</div>`:``}
+              </div>`)}
+          </div>`:``}
+      ${s.length?O`<div class="dk-dag-insp-sec">
+            <div class="dk-l">waits on</div>
+            <div class="dk-dag-chips">${s.map(o)}</div>
+          </div>`:``}
+      ${c.length?O`<div class="dk-dag-insp-sec">
+            <div class="dk-l">unblocks</div>
+            <div class="dk-dag-chips">${c.map(o)}</div>
+          </div>`:``}
+    </aside>`}onHover(e){let t=(e.target?.closest?.(`g.dk-dag-node`))?.getAttribute(`data-id`)??null;t!==this.hover&&(this.hover=t)}};G([R({attribute:!1})],K.prototype,`panel`,void 0),G([R({attribute:!1})],K.prototype,`onAction`,void 0),G([z()],K.prototype,`hover`,void 0),G([z()],K.prototype,`sel`,void 0),K=G([L(`dk-dag`)],K);var q=class extends I{constructor(...e){super(...e),this.panel={type:`form`},this.values={},this.dirty=!1}createRenderRoot(){return this}willUpdate(e){if(e.has(`panel`)&&!this.dirty){let e={};for(let t of this.panel.fields??[])e[t.key]=t.value??(t.kind===`checkbox`?!1:``);this.values=e}}set(e,t){this.values={...this.values,[e]:t},this.dirty=!0}field(e){let t=this.values[e.key],n=O`<span class="dk-fl">${e.label??e.key}</span>`;return e.kind===`textarea`?O`<label class="dk-f dk-full"
         >${n}<textarea
           .value=${t==null?``:String(t)}
           @input=${t=>this.set(e.key,t.target.value)}
@@ -228,7 +265,10 @@ dk-dag,dk-form,dk-wordcloud{display:contents}
 .dk-dag-elig-key{background:transparent!important;border:2px solid var(--dk-ready);border-radius:3px}
 .dk-dag-crit-key{background:var(--dk-crit)!important}
 .dk-dag-float-key{background:var(--dk-edge)!important;opacity:.4}
-.dk-dag-scroll{margin-top:6px;border:1px solid var(--dk-line);border-radius:9px;background:var(--dk-bg);overflow:auto;max-height:640px}
+/* graph + inspector sit side by side, and wrap the inspector under the graph when the panel
+   is too narrow to hold both. */
+.dk-dag-body{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;align-items:flex-start}
+.dk-dag-scroll{flex:1 1 440px;min-width:0;border:1px solid var(--dk-line);border-radius:9px;background:var(--dk-bg);overflow:auto;max-height:640px}
 svg.dk-dag{display:block}
 /* Float rail: how far a unit can slip before it moves the finish. Behind the nodes, quiet. */
 .dk-dag-float{fill:var(--dk-edge);opacity:.28}
@@ -256,7 +296,36 @@ svg.dk-dag{display:block}
    moment you reached for it. This (0,4,0) rule restores it while still marking hover. */
 .dk-dag-node:hover .dk-dag-box.elig{stroke:var(--dk-ready);stroke-width:2.5}
 .dk-dag-lbl{fill:var(--dk-fg);font-size:12px;font-weight:600}
-.dk-dag-sub{fill:var(--dk-muted);font-size:11px;font-family:ui-monospace,monospace}`;function Lt(){if(typeof document>`u`||document.getElementById(`dk-css`))return;let e=document.createElement(`style`);e.id=`dk-css`,e.textContent=It,(document.head??document.documentElement).appendChild(e)}var Rt=(e,t)=>typeof e.id==`string`?`id:${e.id}`:`ix:${t}`;function zt(e,t,n){Lt(),t.classList.add(`dk-root`);let r=e.panels??[];ke(O`
+.dk-dag-sub{fill:var(--dk-muted);font-size:11px;font-family:ui-monospace,monospace}
+/* selected node: its own outline, set after the hover/crit rules so a click reads clearly.
+   Hover (higher specificity) still wins while the pointer is on it, as transient feedback. */
+.dk-dag-node.sel .dk-dag-box{stroke:var(--dk-accent2);stroke-width:3}
+/* --- inspector --- */
+.dk-dag-insp{flex:0 1 320px;min-width:240px;border:1px solid var(--dk-line);border-radius:9px;background:var(--dk-panel);padding:12px 14px;max-height:640px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.dk-dag-insp.empty{align-items:center;justify-content:center;color:var(--dk-muted)}
+.dk-dag-insp-hint{font-size:12px;color:var(--dk-muted);text-align:center;padding:18px 8px}
+.dk-dag-insp-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dk-dag-insp-id{font-family:ui-monospace,monospace;font-size:12px;letter-spacing:.08em;color:var(--dk-muted);text-transform:uppercase}
+.dk-dag-insp-x{border:0;background:none;color:var(--dk-muted);font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
+.dk-dag-insp-x:hover{color:var(--dk-fg)}
+.dk-dag-insp-title{font-size:15px;font-weight:600;line-height:1.25}
+.dk-dag-insp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dk-dag-state{font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid var(--dk-line);text-transform:lowercase}
+.dk-dag-facts{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:12px}
+.dk-dag-facts>div{display:contents}
+.dk-dag-facts dt{color:var(--dk-muted);text-transform:uppercase;font-size:10px;letter-spacing:.05em;align-self:center}
+.dk-dag-facts dd{margin:0;color:var(--dk-fg)}
+.dk-dag-insp-note{font-size:12.5px;line-height:1.55;color:var(--dk-fg);margin:0}
+.dk-dag-insp-sec{display:flex;flex-direction:column;gap:5px;padding-top:9px;border-top:1px solid var(--dk-line)}
+.dk-dag-ref{font-size:12px}
+.dk-dag-ref a{color:var(--dk-accent);text-decoration:none}
+.dk-dag-ref a:hover{text-decoration:underline}
+.dk-dag-ref-l{color:var(--dk-fg);font-weight:600}
+.dk-dag-ref-t{color:var(--dk-muted);line-height:1.5;margin-top:2px}
+.dk-dag-chips{display:flex;flex-wrap:wrap;gap:5px}
+.dk-dag-chip{font-family:ui-monospace,monospace;font-size:11px;padding:2px 8px;border:1px solid var(--dk-line);border-radius:5px;background:var(--dk-bg);color:var(--dk-fg);cursor:pointer}
+.dk-dag-chip:hover{border-color:var(--dk-accent);color:var(--dk-accent)}
+.dk-dag-insp .dk-l{font-size:10px;color:var(--dk-muted);text-transform:uppercase;letter-spacing:.06em}`;function Lt(){if(typeof document>`u`||document.getElementById(`dk-css`))return;let e=document.createElement(`style`);e.id=`dk-css`,e.textContent=It,(document.head??document.documentElement).appendChild(e)}var Rt=(e,t)=>typeof e.id==`string`?`id:${e.id}`:`ix:${t}`;function zt(e,t,n){Lt(),t.classList.add(`dk-root`);let r=e.panels??[];ke(O`
       ${e.title?O`<div class="dk-title">${e.title}</div>`:``}
       <div class="dk-panels">
         ${Ge(r,Rt,e=>Ft(e,n))}

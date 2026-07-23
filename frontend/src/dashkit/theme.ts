@@ -73,7 +73,10 @@ dk-dag,dk-form,dk-wordcloud{display:contents}
 .dk-dag-elig-key{background:transparent!important;border:2px solid var(--dk-ready);border-radius:3px}
 .dk-dag-crit-key{background:var(--dk-crit)!important}
 .dk-dag-float-key{background:var(--dk-edge)!important;opacity:.4}
-.dk-dag-scroll{margin-top:6px;border:1px solid var(--dk-line);border-radius:9px;background:var(--dk-bg);overflow:auto;max-height:640px}
+/* graph + inspector sit side by side, and wrap the inspector under the graph when the panel
+   is too narrow to hold both. */
+.dk-dag-body{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;align-items:flex-start}
+.dk-dag-scroll{flex:1 1 440px;min-width:0;border:1px solid var(--dk-line);border-radius:9px;background:var(--dk-bg);overflow:auto;max-height:640px}
 svg.dk-dag{display:block}
 /* Float rail: how far a unit can slip before it moves the finish. Behind the nodes, quiet. */
 .dk-dag-float{fill:var(--dk-edge);opacity:.28}
@@ -101,7 +104,36 @@ svg.dk-dag{display:block}
    moment you reached for it. This (0,4,0) rule restores it while still marking hover. */
 .dk-dag-node:hover .dk-dag-box.elig{stroke:var(--dk-ready);stroke-width:2.5}
 .dk-dag-lbl{fill:var(--dk-fg);font-size:12px;font-weight:600}
-.dk-dag-sub{fill:var(--dk-muted);font-size:11px;font-family:ui-monospace,monospace}`;
+.dk-dag-sub{fill:var(--dk-muted);font-size:11px;font-family:ui-monospace,monospace}
+/* selected node: its own outline, set after the hover/crit rules so a click reads clearly.
+   Hover (higher specificity) still wins while the pointer is on it, as transient feedback. */
+.dk-dag-node.sel .dk-dag-box{stroke:var(--dk-accent2);stroke-width:3}
+/* --- inspector --- */
+.dk-dag-insp{flex:0 1 320px;min-width:240px;border:1px solid var(--dk-line);border-radius:9px;background:var(--dk-panel);padding:12px 14px;max-height:640px;overflow:auto;display:flex;flex-direction:column;gap:10px}
+.dk-dag-insp.empty{align-items:center;justify-content:center;color:var(--dk-muted)}
+.dk-dag-insp-hint{font-size:12px;color:var(--dk-muted);text-align:center;padding:18px 8px}
+.dk-dag-insp-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dk-dag-insp-id{font-family:ui-monospace,monospace;font-size:12px;letter-spacing:.08em;color:var(--dk-muted);text-transform:uppercase}
+.dk-dag-insp-x{border:0;background:none;color:var(--dk-muted);font-size:18px;line-height:1;cursor:pointer;padding:0 2px}
+.dk-dag-insp-x:hover{color:var(--dk-fg)}
+.dk-dag-insp-title{font-size:15px;font-weight:600;line-height:1.25}
+.dk-dag-insp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.dk-dag-state{font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid var(--dk-line);text-transform:lowercase}
+.dk-dag-facts{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font-size:12px}
+.dk-dag-facts>div{display:contents}
+.dk-dag-facts dt{color:var(--dk-muted);text-transform:uppercase;font-size:10px;letter-spacing:.05em;align-self:center}
+.dk-dag-facts dd{margin:0;color:var(--dk-fg)}
+.dk-dag-insp-note{font-size:12.5px;line-height:1.55;color:var(--dk-fg);margin:0}
+.dk-dag-insp-sec{display:flex;flex-direction:column;gap:5px;padding-top:9px;border-top:1px solid var(--dk-line)}
+.dk-dag-ref{font-size:12px}
+.dk-dag-ref a{color:var(--dk-accent);text-decoration:none}
+.dk-dag-ref a:hover{text-decoration:underline}
+.dk-dag-ref-l{color:var(--dk-fg);font-weight:600}
+.dk-dag-ref-t{color:var(--dk-muted);line-height:1.5;margin-top:2px}
+.dk-dag-chips{display:flex;flex-wrap:wrap;gap:5px}
+.dk-dag-chip{font-family:ui-monospace,monospace;font-size:11px;padding:2px 8px;border:1px solid var(--dk-line);border-radius:5px;background:var(--dk-bg);color:var(--dk-fg);cursor:pointer}
+.dk-dag-chip:hover{border-color:var(--dk-accent);color:var(--dk-accent)}
+.dk-dag-insp .dk-l{font-size:10px;color:var(--dk-muted);text-transform:uppercase;letter-spacing:.06em}`;
 
 /** Inject the theme once. Idempotent and safe to call on every render. */
 export function injectCSS(): void {

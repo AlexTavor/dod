@@ -134,8 +134,9 @@ class TestReadyIds:
 
 class TestDagNodes:
     def test_builds_the_whole_node_in_one_shape(self) -> None:
-        got = dag_nodes([item("u1", title="Swept circle", status="pending",
-                              track="SIM", size="M", critical=True, depends_on=["u0"])])
+        got = dag_nodes([item("u1", title="Swept circle", status="pending", track="SIM",
+                              size="M", risk="high", critical=True, agentic=True,
+                              depends_on=["u0"], note="Pure geometry.")])
         # Criticality is not in `sub`: the graph draws the critical path in the redline colour,
         # derived by CPM, so the plan's own `critical` flag does not leak into the label.
         assert got == [{
@@ -145,6 +146,15 @@ class TestDagNodes:
             "sub": "SIM · M",
             "weight": 2,
             "dependsOn": ["u0"],
+            "detail": {
+                "facts": [
+                    {"k": "track", "v": "SIM"},
+                    {"k": "size", "v": "M"},
+                    {"k": "risk", "v": "high"},
+                    {"k": "by", "v": "agent"},
+                ],
+                "note": "Pure geometry.",
+            },
         }]
 
     def test_falls_back_to_the_id_when_a_unit_has_no_title(self) -> None:
@@ -153,6 +163,38 @@ class TestDagNodes:
     def test_tolerates_a_malformed_depends_on(self) -> None:
         assert dag_nodes([{"id": "x", "depends_on": "a"}])[0]["dependsOn"] == []
         assert dag_nodes([{"id": "y", "depends_on": ["a", 3, None]}])[0]["dependsOn"] == ["a"]
+
+
+PHASES = [{"id": "M1", "name": "sim core", "goal": "byte-stable traces.",
+           "exit_criteria": "golden reproduces."}]
+
+
+class TestDetail:
+    def test_resolves_the_phase_to_its_goal_and_exit_criteria_as_refs(self) -> None:
+        d = dag_nodes([item("u", phase="M1")], PHASES)[0]["detail"]
+        assert {"k": "phase", "v": "M1: sim core"} in d["facts"]
+        assert d["refs"] == [
+            {"label": "Phase M1 goal", "text": "byte-stable traces."},
+            {"label": "Exit criteria", "text": "golden reproduces."},
+        ]
+
+    def test_a_phase_with_no_registry_entry_still_names_the_phase(self) -> None:
+        d = dag_nodes([item("u", phase="M9")], PHASES)[0]["detail"]
+        assert {"k": "phase", "v": "M9"} in d["facts"]
+        assert "refs" not in d  # nothing to zoom into
+
+    def test_a_human_unit_is_labelled_human_call(self) -> None:
+        d = dag_nodes([item("u", agentic=False)])[0]["detail"]
+        assert {"k": "by", "v": "human call"} in d["facts"]
+
+    def test_a_delivered_pr_becomes_a_source_ref_with_its_url(self) -> None:
+        # A producer that records PR refs (e.g. .work) surfaces them as links; PDD plans do not.
+        d = dag_nodes([item("u", delivers=[{"pr": 42, "url": "https://x/pull/42"}])])[0]["detail"]
+        assert {"label": "PR #42", "href": "https://x/pull/42"} in d["refs"]
+
+    def test_a_pr_without_a_url_is_a_label_only_ref(self) -> None:
+        d = dag_nodes([item("u", delivers=[{"pr": 7}])])[0]["detail"]
+        assert {"label": "PR #7"} in d["refs"]
 
 
 DEMO_PLAN: dict[str, Any] = {
