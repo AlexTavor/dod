@@ -8,10 +8,12 @@ import pytest
 
 from dod.plankit import render_for
 from dod.planspec import (
+    critical_units,
     cycle_nodes,
     dag_nodes,
     dangling_deps,
     items_of,
+    max_concurrency,
     ready_ids,
     spec_from_plan,
     status_word,
@@ -72,6 +74,42 @@ class TestGraphHealth:
         assert cycle_nodes(items) == []
 
 
+class TestMaxConcurrency:
+    def test_a_chain_has_a_ceiling_of_one(self) -> None:
+        items = [item("a"), item("b", depends_on=["a"]), item("c", depends_on=["b"])]
+        assert max_concurrency(items) == 1
+
+    def test_independent_units_are_all_concurrent(self) -> None:
+        assert max_concurrency([item("a"), item("b"), item("c")]) == 3
+
+    def test_a_diamond_allows_the_two_middle_units_at_once(self) -> None:
+        # a → {b, c} → d: the widest independent set is {b, c}.
+        items = [item("a"), item("b", depends_on=["a"]), item("c", depends_on=["a"]),
+                 item("d", depends_on=["b", "c"])]
+        assert max_concurrency(items) == 2
+
+    def test_a_single_unit_has_a_ceiling_of_one(self) -> None:
+        assert max_concurrency([item("a")]) == 1
+
+
+class TestCriticalUnits:
+    def test_the_only_chain_is_entirely_critical(self) -> None:
+        items = [item("a"), item("b", depends_on=["a"])]
+        assert critical_units(items) == {"a", "b"}
+
+    def test_a_lighter_parallel_branch_has_float_and_is_not_critical(self) -> None:
+        # a(2)→b(2)→d against a→c(1)→d: the b branch is heavier, so c floats.
+        items = [item("a", size="M"), item("b", size="M", depends_on=["a"]),
+                 item("c", size="S", depends_on=["a"]), item("d", size="S", depends_on=["b", "c"])]
+        assert critical_units(items) == {"a", "b", "d"}
+
+    def test_is_derived_from_weight_not_the_plans_own_flag(self) -> None:
+        # The plan marks b critical, but by weight the heavier c is the spine.
+        items = [item("a", size="S"), item("b", size="S", critical=True, depends_on=["a"]),
+                 item("c", size="L", depends_on=["a"])]
+        assert critical_units(items) == {"a", "c"}
+
+
 class TestReadyIds:
     def test_a_not_started_unit_with_every_prerequisite_done_is_ready(self) -> None:
         items = [item("a", status="done"), item("b", depends_on=["a"])]
@@ -96,14 +134,27 @@ class TestReadyIds:
 
 class TestDagNodes:
     def test_builds_the_whole_node_in_one_shape(self) -> None:
-        got = dag_nodes([item("u1", title="Swept circle", status="pending",
-                              track="SIM", size="M", critical=True, depends_on=["u0"])])
+        got = dag_nodes([item("u1", title="Swept circle", status="pending", track="SIM",
+                              size="M", risk="high", critical=True, agentic=True,
+                              depends_on=["u0"], note="Pure geometry.")])
+        # Criticality is not in `sub`: the graph draws the critical path in the redline colour,
+        # derived by CPM, so the plan's own `critical` flag does not leak into the label.
         assert got == [{
             "id": "u1",
             "label": "Swept circle",
             "status": "queued",
-            "sub": "SIM · M · critical",
+            "sub": "SIM · M",
+            "weight": 2,
             "dependsOn": ["u0"],
+            "detail": {
+                "facts": [
+                    {"k": "track", "v": "SIM"},
+                    {"k": "size", "v": "M"},
+                    {"k": "risk", "v": "high"},
+                    {"k": "by", "v": "agent"},
+                ],
+                "note": "Pure geometry.",
+            },
         }]
 
     def test_falls_back_to_the_id_when_a_unit_has_no_title(self) -> None:
@@ -112,6 +163,38 @@ class TestDagNodes:
     def test_tolerates_a_malformed_depends_on(self) -> None:
         assert dag_nodes([{"id": "x", "depends_on": "a"}])[0]["dependsOn"] == []
         assert dag_nodes([{"id": "y", "depends_on": ["a", 3, None]}])[0]["dependsOn"] == ["a"]
+
+
+PHASES = [{"id": "M1", "name": "sim core", "goal": "byte-stable traces.",
+           "exit_criteria": "golden reproduces."}]
+
+
+class TestDetail:
+    def test_resolves_the_phase_to_its_goal_and_exit_criteria_as_refs(self) -> None:
+        d = dag_nodes([item("u", phase="M1")], PHASES)[0]["detail"]
+        assert {"k": "phase", "v": "M1: sim core"} in d["facts"]
+        assert d["refs"] == [
+            {"label": "Phase M1 goal", "text": "byte-stable traces."},
+            {"label": "Exit criteria", "text": "golden reproduces."},
+        ]
+
+    def test_a_phase_with_no_registry_entry_still_names_the_phase(self) -> None:
+        d = dag_nodes([item("u", phase="M9")], PHASES)[0]["detail"]
+        assert {"k": "phase", "v": "M9"} in d["facts"]
+        assert "refs" not in d  # nothing to zoom into
+
+    def test_a_human_unit_is_labelled_human_call(self) -> None:
+        d = dag_nodes([item("u", agentic=False)])[0]["detail"]
+        assert {"k": "by", "v": "human call"} in d["facts"]
+
+    def test_a_delivered_pr_becomes_a_source_ref_with_its_url(self) -> None:
+        # A producer that records PR refs (e.g. .work) surfaces them as links; PDD plans do not.
+        d = dag_nodes([item("u", delivers=[{"pr": 42, "url": "https://x/pull/42"}])])[0]["detail"]
+        assert {"label": "PR #42", "href": "https://x/pull/42"} in d["refs"]
+
+    def test_a_pr_without_a_url_is_a_label_only_ref(self) -> None:
+        d = dag_nodes([item("u", delivers=[{"pr": 7}])])[0]["detail"]
+        assert {"label": "PR #7"} in d["refs"]
 
 
 DEMO_PLAN: dict[str, Any] = {
@@ -140,6 +223,10 @@ class TestSpecFromPlan:
         assert stats["units"]["sub"] == "1 done"
         assert stats["ready now"]["value"] == 1        # only b
         assert stats["phases"]["value"] == 2
+        # a → b → c is a chain: nothing is concurrent, and the whole chain is the spine.
+        assert stats["max parallel"]["value"] == 1
+        assert stats["critical path"]["value"] == 3
+        assert stats["critical path"]["sub"] == "6 u"  # M+L+S weighted
         prog = panels_of(spec, "progress")[0]
         assert (prog["value"], prog["max"]) == (2, 6)  # M done of M+L+S
 

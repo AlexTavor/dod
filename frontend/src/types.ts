@@ -185,11 +185,29 @@ export interface DagNode {
   status?: string;
   /** Second line, e.g. "M · high · 4 findings". */
   sub?: string;
+  /** Relative cost of the unit. Positions the node on the earliest-start axis and sizes its
+   *  float bar; defaults to 1, so a weightless graph lays out by plain dependency depth. */
+  weight?: number;
   /** Prerequisite node ids; an edge runs prerequisite → this node. */
   dependsOn?: string[];
   /** Optional click action routed through onAction (e.g. open this unit's findings). */
   action?: string;
   payload?: Record<string, unknown>;
+  /** What the inspector shows when this node is selected. Waits-on / unblocks are derived
+   *  from the graph, so they are not repeated here. */
+  detail?: DagDetail;
+}
+
+/** The inspector's content for one node: a scannable overview that reads top to bottom, from
+ *  the label/value facts to the prose to the references you can follow out to a source. */
+export interface DagDetail {
+  /** Label/value rows, shown as a definition list (phase, track, size, risk, …). */
+  facts?: Array<{ k: string; v: string }>;
+  /** The unit's brief, in full. */
+  note?: string;
+  /** References to zoom into. `text` is shown inline (e.g. a phase goal); `href` renders an
+   *  external link (e.g. a PR). An entry may carry either or both. */
+  refs?: Array<{ label: string; text?: string; href?: string }>;
 }
 
 export interface DagEdge {
