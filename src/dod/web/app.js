@@ -12,27 +12,29 @@
       <rect x=${n.l} y=${i+3} width=${c} height=${16} fill=${U(0)}></rect>
       <text class="dk-cval" x=${n.l+c+6} y=${i+22/2+4}>${Je(Number(t)||0)}</text>`)}),O`<svg viewBox="0 0 ${820} ${i}">${s}</svg>`}function tt(e){let t=e.kind??`line`,n=e.series??(e.values?[{name:e.label??``,values:e.values}]:[]),r=e.x??(n[0]?n[0].values.map((e,t)=>t):[]),i=n[0]?.values??[],a;return a=t===`spark`?Xe(i,U(e.color??0)):t===`diverging`?$e(r,i,e.left,e.right):t===`hbar`?et(r,i):Qe(t===`bars`?`bar`:t===`stacked`?`stacked`:t===`area`?`area`:`line`,r,n,e.markers),O`<div class="dk-panel dk-chart ${t===`spark`?``:`dk-full`}">
     ${e.title?O`<div class="dk-l">${e.title}</div>`:``}${a}
-  </div>`}var nt={nodeH:42,minW:88,scale:96,gap:12,rowGap:14,pad:16};function rt(e,t=[]){let n=new Set(e.map(e=>e.id)),r=new Set,i=[],a=(e,t)=>{if(e===t||!n.has(e)||!n.has(t))return;let a=`${e} ${t}`;r.has(a)||(r.add(a),i.push({from:e,to:t}))};for(let e of t)a(e.from,e.to);for(let t of e)for(let e of t.dependsOn??[])a(e,t.id);return i}function it(e,t){let n=new Map,r=new Map;for(let t of e)n.set(t,0),r.set(t,[]);for(let e of t)r.get(e.from).push(e.to),n.set(e.to,n.get(e.to)+1);let i=new Map,a=e.filter(e=>n.get(e)===0);for(let e of a)i.set(e,0);let o=0;for(;a.length;){let e=[];for(let t of a){o++;let a=i.get(t);for(let o of r.get(t)){i.set(o,Math.max(i.get(o)??0,a+1));let t=n.get(o)-1;n.set(o,t),t===0&&e.push(o)}}a=e}if(o<e.length){let t=0;for(let e of i.values())t=Math.max(t,e);for(let n of e)i.has(n)||i.set(n,t+1)}return i}function at(e,t,n,r){let i=new Map,a=new Map;for(let t of e)i.set(t,[]),a.set(t,[]);for(let e of t)n.get(e.to)>n.get(e.from)&&(a.get(e.from).push(e.to),i.get(e.to).push(e.from));let o=[...e].sort((e,t)=>n.get(e)-n.get(t)),s=new Map;for(let e of o)s.set(e,Math.max(0,...i.get(e).map(e=>s.get(e)+r(e))));let c=Math.max(0,...e.map(e=>s.get(e)+r(e))),l=new Map,u=new Map;for(let e of[...o].reverse()){let t=a.get(e).length?Math.min(...a.get(e).map(e=>l.get(e)-r(e))):c;l.set(e,t),u.set(e,Math.max(0,t-r(e)-s.get(e)))}return{asap:s,slack:u}}function ot(e,t,n){let r=(t.get(e)??[]).map(e=>n.get(e)).filter(e=>e!=null);return r.length?r.reduce((e,t)=>e+t,0)/r.length:n.get(e)??0}function st(e,t=[],n={}){let r={...nt,...n};if(!e.length)return{nodes:[],edges:[],width:0,height:0};let i=e.map(e=>e.id),a=rt(e,t),o=it(i,a),s=new Map(e.map(e=>[e.id,Number.isFinite(e.weight)?Number(e.weight):1])),c=e=>Math.max(.1,s.get(e)??1),{asap:l,slack:u}=at(i,a,o,c),d=r.nodeH+r.rowGap,f=e=>r.pad+l.get(e)*r.scale,p=e=>Math.max(r.minW,c(e)*r.scale-r.gap),m=new Map(i.map(e=>[e,[]]));for(let e of a)o.get(e.to)>o.get(e.from)&&m.get(e.to).push(e.from);let h=new Map,g=(e,t)=>{h.clear();let n=[];for(let i of e){let e=f(i),a=t(i),o=-1,s=1/0;for(let t=0;t<n.length;t++)n[t]<=e-r.gap&&Math.abs(t-a)<s&&(s=Math.abs(t-a),o=t);o===-1&&(o=n.length,n.push(0)),n[o]=e+p(i),h.set(i,o)}},ee=e=>(t,n)=>f(t)-f(n)||e(t)-e(n)||t.localeCompare(n);g([...i].sort(ee(()=>0)),()=>0);let te=new Map(h);g([...i].sort(ee(e=>ot(e,m,te))),e=>ot(e,m,te));let _=i.map(e=>{let t=f(e),n=p(e),i=u.get(e);return{id:e,rank:o.get(e),lane:h.get(e),x:t,y:r.pad+h.get(e)*d,w:n,h:r.nodeH,slack:Math.round(i*100)/100,floatEndX:t+n+i*r.scale,critical:i<.01}}),v=new Set(_.filter(e=>e.critical).map(e=>e.id)),y=e=>r.pad+h.get(e)*d+r.nodeH/2,ne=a.map(e=>({from:e.from,to:e.to,x1:f(e.from)+p(e.from),y1:y(e.from),x2:f(e.to),y2:y(e.to),back:o.get(e.from)>=o.get(e.to),critical:v.has(e.from)&&v.has(e.to)})),b=Math.max(1,..._.map(e=>e.lane+1));return{nodes:_,edges:ne,width:Math.max(0,..._.map(e=>Math.max(e.x+e.w,e.floatEndX)))+r.pad,height:r.pad*2+b*r.nodeH+(b-1)*r.rowGap}}var ct={queued:{bucket:`idle`,satisfies:!1,notBegun:!0},pending:{bucket:`idle`,satisfies:!1,notBegun:!0},planning:{bucket:`active`,satisfies:!1,notBegun:!1},"in-cycle":{bucket:`active`,satisfies:!1,notBegun:!1},"in-progress":{bucket:`active`,satisfies:!1,notBegun:!1},green:{bucket:`good`,satisfies:!0,notBegun:!1},landed:{bucket:`good`,satisfies:!0,notBegun:!1},committed:{bucket:`good`,satisfies:!0,notBegun:!1},done:{bucket:`good`,satisfies:!0,notBegun:!1},blocked:{bucket:`warn`,satisfies:!1,notBegun:!1},"needs-hitl":{bucket:`warn`,satisfies:!1,notBegun:!1},error:{bucket:`err`,satisfies:!1,notBegun:!1}},lt={bucket:`idle`,satisfies:!1,notBegun:!1},ut=e=>ct[(e??``).toLowerCase()]??lt,dt=e=>ut(e).bucket,ft=e=>ut(e).satisfies,pt=e=>ut(e).notBegun;function mt(e,t){let n=new Map,r=new Map;for(let t of e)n.set(t,[]),r.set(t,[]);for(let e of t)!n.has(e.from)||!n.has(e.to)||(r.get(e.from).push(e.to),n.get(e.to).push(e.from));return{up:n,down:r}}function ht(e,t){let n=new Set,r=[e];for(;r.length;){let e=r.pop();for(let i of t.get(e)??[])n.has(i)||(n.add(i),r.push(i))}return n}function gt(e,t){return new Set([e,...ht(e,t.up),...ht(e,t.down)])}function _t(e,t){let n=new Set(e.filter(e=>ft(e.status)).map(e=>e.id)),r=new Set;for(let i of e)pt(i.status)&&(t.get(i.id)??[]).every(e=>n.has(e))&&r.add(i.id);return r}function K(e,t,n,r){var i=arguments.length,a=i<3?t:r===null?r=Object.getOwnPropertyDescriptor(t,n):r,o;if(typeof Reflect==`object`&&typeof Reflect.decorate==`function`)a=Reflect.decorate(e,t,n,r);else for(var s=e.length-1;s>=0;s--)(o=e[s])&&(a=(i<3?o(a):i>3?o(t,n,a):o(t,n))||a);return i>3&&a&&Object.defineProperty(t,n,a),a}var vt={idle:`var(--dk-muted)`,active:`var(--dk-accent)`,good:`var(--dk-ok)`,warn:`var(--dk-warn)`,err:`var(--dk-err)`},yt=[[`idle`,`queued`],[`active`,`in progress`],[`good`,`done`],[`warn`,`blocked`],[`err`,`error`]],bt=e=>vt[dt(e)];function xt(e){let t=Math.max(24,Math.abs(e.x2-e.x1)/2);return`M${e.x1},${e.y1} C${e.x1+t},${e.y1} ${e.x2-t},${e.y2} ${e.x2},${e.y2}`}var q=class extends L{constructor(...e){super(...e),this.panel={type:`dag`},this.hover=null,this.sel=null}createRenderRoot(){return this}nodes(){return(this.panel.nodes??[]).filter(e=>!!e&&e.id!=null)}legend(){return O`<div class="dk-legend dk-dag-legend">
-      ${yt.map(([e,t])=>O`<span><i style="background:${vt[e]}"></i>${t}</span>`)}
+  </div>`}var nt={nodeH:42,minW:88,scale:96,gap:12,rowGap:14,pad:16};function rt(e,t=[]){let n=new Set(e.map(e=>e.id)),r=new Set,i=[],a=(e,t)=>{if(e===t||!n.has(e)||!n.has(t))return;let a=`${e} ${t}`;r.has(a)||(r.add(a),i.push({from:e,to:t}))};for(let e of t)a(e.from,e.to);for(let t of e)for(let e of t.dependsOn??[])a(e,t.id);return i}function it(e,t){let n=new Map,r=new Map;for(let t of e)n.set(t,0),r.set(t,[]);for(let e of t)r.get(e.from).push(e.to),n.set(e.to,n.get(e.to)+1);let i=new Map,a=e.filter(e=>n.get(e)===0);for(let e of a)i.set(e,0);let o=0;for(;a.length;){let e=[];for(let t of a){o++;let a=i.get(t);for(let o of r.get(t)){i.set(o,Math.max(i.get(o)??0,a+1));let t=n.get(o)-1;n.set(o,t),t===0&&e.push(o)}}a=e}if(o<e.length){let t=0;for(let e of i.values())t=Math.max(t,e);for(let n of e)i.has(n)||i.set(n,t+1)}return i}function at(e,t,n,r){let i=new Map,a=new Map;for(let t of e)i.set(t,[]),a.set(t,[]);for(let e of t)n.get(e.to)>n.get(e.from)&&(a.get(e.from).push(e.to),i.get(e.to).push(e.from));let o=[...e].sort((e,t)=>n.get(e)-n.get(t)),s=new Map;for(let e of o)s.set(e,Math.max(0,...i.get(e).map(e=>s.get(e)+r(e))));let c=Math.max(0,...e.map(e=>s.get(e)+r(e))),l=new Map,u=new Map;for(let e of[...o].reverse()){let t=a.get(e).length?Math.min(...a.get(e).map(e=>l.get(e)-r(e))):c;l.set(e,t),u.set(e,Math.max(0,t-r(e)-s.get(e)))}return{asap:s,slack:u}}function ot(e,t,n){let r=(t.get(e)??[]).map(e=>n.get(e)).filter(e=>e!=null);return r.length?r.reduce((e,t)=>e+t,0)/r.length:n.get(e)??0}function st(e,t=[],n={}){let r={...nt,...n};if(!e.length)return{nodes:[],edges:[],width:0,height:0};let i=e.map(e=>e.id),a=rt(e,t),o=it(i,a),s=new Map(e.map(e=>[e.id,Number.isFinite(e.weight)?Number(e.weight):1])),c=e=>Math.max(.1,s.get(e)??1),{asap:l,slack:u}=at(i,a,o,c),d=r.nodeH+r.rowGap,f=e=>r.pad+l.get(e)*r.scale,p=e=>Math.max(r.minW,c(e)*r.scale-r.gap),m=new Map(i.map(e=>[e,[]]));for(let e of a)o.get(e.to)>o.get(e.from)&&m.get(e.to).push(e.from);let h=new Map,g=(e,t)=>{h.clear();let n=[];for(let i of e){let e=f(i),a=t(i),o=-1,s=1/0;for(let t=0;t<n.length;t++)n[t]<=e-r.gap&&Math.abs(t-a)<s&&(s=Math.abs(t-a),o=t);o===-1&&(o=n.length,n.push(0)),n[o]=e+p(i),h.set(i,o)}},ee=e=>(t,n)=>f(t)-f(n)||e(t)-e(n)||t.localeCompare(n);g([...i].sort(ee(()=>0)),()=>0);let te=new Map(h);g([...i].sort(ee(e=>ot(e,m,te))),e=>ot(e,m,te));let _=i.map(e=>{let t=f(e),n=p(e),i=u.get(e);return{id:e,rank:o.get(e),lane:h.get(e),x:t,y:r.pad+h.get(e)*d,w:n,h:r.nodeH,slack:Math.round(i*100)/100,floatEndX:t+n+i*r.scale,critical:i<.01}}),v=new Set(_.filter(e=>e.critical).map(e=>e.id)),y=e=>r.pad+h.get(e)*d+r.nodeH/2,ne=a.map(e=>({from:e.from,to:e.to,x1:f(e.from)+p(e.from),y1:y(e.from),x2:f(e.to),y2:y(e.to),back:o.get(e.from)>=o.get(e.to),critical:v.has(e.from)&&v.has(e.to)})),b=Math.max(1,..._.map(e=>e.lane+1));return{nodes:_,edges:ne,width:Math.max(0,..._.map(e=>Math.max(e.x+e.w,e.floatEndX)))+r.pad,height:r.pad*2+b*r.nodeH+(b-1)*r.rowGap}}var ct={queued:{bucket:`idle`,satisfies:!1,notBegun:!0},pending:{bucket:`idle`,satisfies:!1,notBegun:!0},planning:{bucket:`active`,satisfies:!1,notBegun:!1},"in-cycle":{bucket:`active`,satisfies:!1,notBegun:!1},"in-progress":{bucket:`active`,satisfies:!1,notBegun:!1},green:{bucket:`good`,satisfies:!0,notBegun:!1},landed:{bucket:`good`,satisfies:!0,notBegun:!1},committed:{bucket:`good`,satisfies:!0,notBegun:!1},done:{bucket:`good`,satisfies:!0,notBegun:!1},blocked:{bucket:`warn`,satisfies:!1,notBegun:!1},"needs-hitl":{bucket:`warn`,satisfies:!1,notBegun:!1},error:{bucket:`err`,satisfies:!1,notBegun:!1}},lt={bucket:`idle`,satisfies:!1,notBegun:!1},ut=e=>ct[(e??``).toLowerCase()]??lt,dt=e=>ut(e).bucket,ft=e=>ut(e).satisfies,pt=e=>ut(e).notBegun;function mt(e,t){let n=new Map,r=new Map;for(let t of e)n.set(t,[]),r.set(t,[]);for(let e of t)!n.has(e.from)||!n.has(e.to)||(r.get(e.from).push(e.to),n.get(e.to).push(e.from));return{up:n,down:r}}function ht(e,t){let n=new Set,r=[e];for(;r.length;){let e=r.pop();for(let i of t.get(e)??[])n.has(i)||(n.add(i),r.push(i))}return n}function gt(e,t){return new Set([e,...ht(e,t.up),...ht(e,t.down)])}function _t(e,t){let n=new Set(e.filter(e=>ft(e.status)).map(e=>e.id)),r=new Set;for(let i of e)pt(i.status)&&(t.get(i.id)??[]).every(e=>n.has(e))&&r.add(i.id);return r}function vt(e){let t=e.detail??{};return[e.id,e.label,e.sub,e.status,...(t.facts??[]).map(e=>String(e.v)),t.note,...(t.refs??[]).map(e=>e.label)].filter(e=>!!e).join(`
+`).toLowerCase()}var yt=e=>e.toLowerCase().split(/\s+/).filter(Boolean);function bt(e,t){let n=yt(t);if(!n.length)return new Set;let r=new Set;for(let t of e){let e=vt(t);n.every(t=>e.includes(t))&&r.add(t.id)}return r}function xt(e,t){return t.filter(t=>e.has(t.id)).slice().sort((e,t)=>e.x-t.x||e.y-t.y||e.id.localeCompare(t.id)).map(e=>e.id)}function K(e,t,n,r){var i=arguments.length,a=i<3?t:r===null?r=Object.getOwnPropertyDescriptor(t,n):r,o;if(typeof Reflect==`object`&&typeof Reflect.decorate==`function`)a=Reflect.decorate(e,t,n,r);else for(var s=e.length-1;s>=0;s--)(o=e[s])&&(a=(i<3?o(a):i>3?o(t,n,a):o(t,n))||a);return i>3&&a&&Object.defineProperty(t,n,a),a}var St={idle:`var(--dk-muted)`,active:`var(--dk-accent)`,good:`var(--dk-ok)`,warn:`var(--dk-warn)`,err:`var(--dk-err)`},Ct=[[`idle`,`queued`],[`active`,`in progress`],[`good`,`done`],[`warn`,`blocked`],[`err`,`error`]],wt=e=>St[dt(e)];function Tt(e){let t=Math.max(24,Math.abs(e.x2-e.x1)/2);return`M${e.x1},${e.y1} C${e.x1+t},${e.y1} ${e.x2-t},${e.y2} ${e.x2},${e.y2}`}var Et={n:`next`,N:`prev`,Escape:`clear`},Dt=`Enter or n: next match · Shift+Enter or N: previous · Esc: clear`;function Ot(e){return!!e?.closest?.(`input,textarea,select,[contenteditable]:not([contenteditable=false])`)}var q=class extends L{constructor(...e){super(...e),this.panel={type:`dag`},this.hover=null,this.sel=null,this.q=``,this.hitIx=-1,this.hits=[],this.pos=new Map,this.onKey=e=>{if(!this.q.trim()||e.metaKey||e.ctrlKey||e.altKey||Ot(e.target))return;let t=Et[e.key];t&&(t===`clear`?this.query(``):this.step(t===`next`?1:-1),e.preventDefault())}}createRenderRoot(){return this}connectedCallback(){super.connectedCallback(),document.addEventListener(`keydown`,this.onKey)}disconnectedCallback(){document.removeEventListener(`keydown`,this.onKey),super.disconnectedCallback()}nodes(){return(this.panel.nodes??[]).filter(e=>!!e&&e.id!=null)}legend(){return O`<div class="dk-legend dk-dag-legend">
+      ${Ct.map(([e,t])=>O`<span><i style="background:${St[e]}"></i>${t}</span>`)}
       <span><i class="dk-dag-elig-key"></i>ready now</span>
       <span><i class="dk-dag-crit-key"></i>critical path</span>
       <span><i class="dk-dag-float-key"></i>float</span>
-    </div>`}render(){let e=this.nodes(),t=this.panel.title?O`<div class="dk-l">${this.panel.title}</div>`:``;if(!e.length)return O`<div class="dk-panel dk-full">${t}<div class="dk-muted">no units to show</div></div>`;let n=st(e.map(e=>({id:e.id,dependsOn:e.dependsOn,weight:e.weight})),this.panel.edges),r=new Map(e.map(e=>[e.id,e])),i=mt(e.map(e=>e.id),n.edges),a=_t(e,i.up),o=this.hover?gt(this.hover,i):null,s=this.sel&&r.has(this.sel)?this.sel:null,c=n.nodes.filter(e=>e.floatEndX>e.x+e.w+1).map(e=>k`<rect
-          class=${`dk-dag-float${o&&!o.has(e.id)?` dim`:``}`}
+    </div>`}render(){let e=this.nodes(),t=this.panel.title?O`<div class="dk-l">${this.panel.title}</div>`:``;if(!e.length)return O`<div class="dk-panel dk-full">${t}<div class="dk-muted">no units to show</div></div>`;let n=st(e.map(e=>({id:e.id,dependsOn:e.dependsOn,weight:e.weight})),this.panel.edges),r=new Map(e.map(e=>[e.id,e])),i=mt(e.map(e=>e.id),n.edges),a=_t(e,i.up),o=bt(e,this.q);this.hits=xt(o,n.nodes),this.pos=new Map(n.nodes.map(e=>[e.id,{x:e.x,y:e.y,w:e.w,h:e.h}]));let s=this.hover?gt(this.hover,i):this.q.trim()?o:null,c=this.sel&&r.has(this.sel)?this.sel:null,l=n.nodes.filter(e=>e.floatEndX>e.x+e.w+1).map(e=>k`<rect
+          class=${`dk-dag-float${s&&!s.has(e.id)?` dim`:``}`}
           x=${e.x+e.w} y=${e.y+e.h/2-3}
-          width=${e.floatEndX-(e.x+e.w)} height="6" rx="3"></rect>`),l=n.edges.map(e=>k`<path class=${`dk-dag-edge${o&&o.has(e.from)&&o.has(e.to)?` on`:``}${e.back?` back`:``}${e.critical?` crit`:``}`} d=${xt(e)} marker-end="url(#dk-arrow)"></path>`),u=n.nodes.map(e=>{let t=r.get(e.id),n=bt(t.status),i=a.has(e.id),c=o?!o.has(e.id):!1,l=t.action,u=s===e.id,d=`dk-dag-node act${c?` dim`:``}${e.critical?` crit`:``}${u?` sel`:``}`,f=Math.max(4,Math.floor((e.w-22)/6.2));return k`<g
-        class=${d}
+          width=${e.floatEndX-(e.x+e.w)} height="6" rx="3"></rect>`),u=n.edges.map(e=>k`<path class=${`dk-dag-edge${s&&s.has(e.from)&&s.has(e.to)?` on`:``}${e.back?` back`:``}${e.critical?` crit`:``}`} d=${Tt(e)} marker-end="url(#dk-arrow)"></path>`),d=n.nodes.map(e=>{let t=r.get(e.id),n=wt(t.status),i=a.has(e.id),l=s?!s.has(e.id):!1,u=t.action,d=c===e.id,f=`dk-dag-node act${l?` dim`:``}${e.critical?` crit`:``}${d?` sel`:``}${o.has(e.id)?` match`:``}`,p=Math.max(4,Math.floor((e.w-22)/6.2));return k`<g
+        class=${f}
         data-id=${e.id}
         transform=${`translate(${e.x},${e.y})`}
-        @click=${()=>{this.sel=e.id,l&&this.onAction?.(l,t.payload??{id:e.id})}}
+        @click=${()=>{this.sel=e.id,u&&this.onAction?.(u,t.payload??{id:e.id})}}
       >
         <rect class=${`dk-dag-box${i?` elig`:``}`} width=${e.w} height=${e.h} rx="8"></rect>
         <rect class="dk-dag-tone" x="0" y="0" width="4" height=${e.h} rx="2" fill=${n}></rect>
         <circle cx=${e.w-12} cy="13" r="4" fill=${n}></circle>
-        <text class="dk-dag-lbl" x="13" y="18">${G(t.label??e.id,f)}</text>
-        <text class="dk-dag-sub" x="13" y="33">${G(t.sub??(i?`ready`:t.status??``),f+3)}</text>
+        <text class="dk-dag-lbl" x="13" y="18">${G(t.label??e.id,p)}</text>
+        <text class="dk-dag-sub" x="13" y="33">${G(t.sub??(i?`ready`:t.status??``),p+3)}</text>
       </g>`});return O`<div class="dk-panel dk-full">
-      ${t}${this.legend()}
+      <div class="dk-dag-head">${t}${this.finder()}</div>
+      ${this.legend()}
       <div class="dk-dag-body">
         <div
           class="dk-dag-scroll"
@@ -50,20 +52,31 @@
                 <path class="dk-dag-arrowhead" d="M0,0 L8,4 L0,8 z"></path>
               </marker>
             </defs>
-            <g class="dk-dag-floats">${c}</g>
-            <g class="dk-dag-edges">${l}</g>
-            <g class="dk-dag-nodes">${u}</g>
+            <g class="dk-dag-floats">${l}</g>
+            <g class="dk-dag-edges">${u}</g>
+            <g class="dk-dag-nodes">${d}</g>
           </svg>
         </div>
-        ${this.inspector(s,r,i,a)}
+        ${this.inspector(c,r,i,a)}
       </div>
-    </div>`}inspector(e,t,n,r){if(!e)return O`<aside class="dk-dag-insp empty">
+    </div>`}tally(){let e=this.hits.length;return this.q.trim()?e?this.hitIx<0?`${e} hit${e===1?``:`s`}`:`${this.hitIx+1}/${e}`:`no match`:``}finder(){let e=!!this.q.trim()&&!this.hits.length;return O`<div class="dk-dag-find">
+      <input
+        class="dk-dag-q"
+        type="search"
+        placeholder="search units"
+        title=${Dt}
+        .value=${this.q}
+        @input=${e=>this.query(e.target.value)}
+        @keydown=${e=>this.onFieldKey(e)}
+      />
+      <span class="dk-dag-tally ${e?`none`:``}">${this.tally()}</span>
+    </div>`}query(e){this.q=e,this.hitIx=-1}step(e){let t=this.hits.length;if(!t)return;let n=this.hitIx>=0?this.hitIx:e>0?-1:0;this.hitIx=((n+e)%t+t)%t,this.sel=this.hits[this.hitIx],this.reveal(this.sel)}reveal(e){let t=this.pos.get(e),n=this.querySelector(`.dk-dag-scroll`);!t||!n||typeof n.scrollTo!=`function`||n.scrollTo({left:t.x+t.w/2-n.clientWidth/2,top:t.y+t.h/2-n.clientHeight/2})}onFieldKey(e){if(e.key===`Enter`)this.step(e.shiftKey?-1:1);else if(e.key===`Escape`)this.query(``),e.target.blur();else return;e.preventDefault()}inspector(e,t,n,r){if(!e)return O`<aside class="dk-dag-insp empty">
         <div class="dk-dag-insp-hint">Select a unit to see its detail.</div>
       </aside>`;let i=t.get(e),a=i.detail??{},o=e=>O`<button
         class="dk-dag-chip"
         title=${t.get(e)?.label??e}
         @click=${()=>{this.sel=e}}
-      >${e}</button>`,s=n.up.get(e)??[],c=n.down.get(e)??[],l=r.has(e),u=l?`ready now`:i.status??`unknown`,d=l?`var(--dk-ready)`:bt(i.status);return O`<aside class="dk-dag-insp">
+      >${e}</button>`,s=n.up.get(e)??[],c=n.down.get(e)??[],l=r.has(e),u=l?`ready now`:i.status??`unknown`,d=l?`var(--dk-ready)`:wt(i.status);return O`<aside class="dk-dag-insp">
       <div class="dk-dag-insp-head">
         <span class="dk-dag-insp-id">${e}</span>
         <button class="dk-dag-insp-x" title="Close" @click=${()=>this.sel=null}>×</button>
@@ -91,7 +104,7 @@
             <div class="dk-l">unblocks</div>
             <div class="dk-dag-chips">${c.map(o)}</div>
           </div>`:``}
-    </aside>`}onHover(e){let t=(e.target?.closest?.(`g.dk-dag-node`))?.getAttribute(`data-id`)??null;t!==this.hover&&(this.hover=t)}};K([z({attribute:!1})],q.prototype,`panel`,void 0),K([z({attribute:!1})],q.prototype,`onAction`,void 0),K([B()],q.prototype,`hover`,void 0),K([B()],q.prototype,`sel`,void 0),q=K([R(`dk-dag`)],q);var J=class extends L{constructor(...e){super(...e),this.panel={type:`form`},this.values={},this.dirty=!1}createRenderRoot(){return this}willUpdate(e){if(e.has(`panel`)&&!this.dirty){let e={};for(let t of this.panel.fields??[])e[t.key]=t.value??(t.kind===`checkbox`?!1:``);this.values=e}}set(e,t){this.values={...this.values,[e]:t},this.dirty=!0}field(e){let t=this.values[e.key],n=O`<span class="dk-fl">${e.label??e.key}</span>`;return e.kind===`textarea`?O`<label class="dk-f dk-full"
+    </aside>`}onHover(e){let t=(e.target?.closest?.(`g.dk-dag-node`))?.getAttribute(`data-id`)??null;t!==this.hover&&(this.hover=t)}};K([z({attribute:!1})],q.prototype,`panel`,void 0),K([z({attribute:!1})],q.prototype,`onAction`,void 0),K([B()],q.prototype,`hover`,void 0),K([B()],q.prototype,`sel`,void 0),K([B()],q.prototype,`q`,void 0),K([B()],q.prototype,`hitIx`,void 0),q=K([R(`dk-dag`)],q);var J=class extends L{constructor(...e){super(...e),this.panel={type:`form`},this.values={},this.dirty=!1}createRenderRoot(){return this}willUpdate(e){if(e.has(`panel`)&&!this.dirty){let e={};for(let t of this.panel.fields??[])e[t.key]=t.value??(t.kind===`checkbox`?!1:``);this.values=e}}set(e,t){this.values={...this.values,[e]:t},this.dirty=!0}field(e){let t=this.values[e.key],n=O`<span class="dk-fl">${e.label??e.key}</span>`;return e.kind===`textarea`?O`<label class="dk-f dk-full"
         >${n}<textarea
           .value=${t==null?``:String(t)}
           @input=${t=>this.set(e.key,t.target.value)}
@@ -118,10 +131,10 @@
         <button class="dk-btn" @click=${()=>this.submit()}>${e.submitLabel??`Save`}</button>
         ${e.cancelAction?O`<button class="dk-btn" @click=${()=>this.cancel()}>Cancel</button>`:``}
       </div>
-    </div>`}};K([z({attribute:!1})],J.prototype,`panel`,void 0),K([z({attribute:!1})],J.prototype,`onAction`,void 0),K([B()],J.prototype,`values`,void 0),K([B()],J.prototype,`dirty`,void 0),J=K([R(`dk-form`)],J);var St={warm:`var(--dk-accent)`,cool:`var(--dk-c6)`,you:`var(--dk-c1)`,them:`var(--dk-c2)`,ok:`var(--dk-ok)`,err:`var(--dk-err)`},Y=class extends L{constructor(...e){super(...e),this.panel={type:`wordcloud`},this.view=`cloud`,this.fkey=null}createRenderRoot(){return this}facets(){return(this.panel.facets??[]).filter(e=>e.terms&&e.terms.length)}current(){let e=this.facets();return e.find(e=>e.key===this.fkey)??e[0]}body(){let e=this.current();if(!e?.terms?.length)return O`<div class="dk-muted">no terms for this lens</div>`;let t=e.legend&&e.legend.length?O`<div class="dk-legend">
-            ${e.legend.map(e=>O`<span><i style="background:${St[e.tone??``]??U(0)}"></i>${e.label}</span>`)}
+    </div>`}};K([z({attribute:!1})],J.prototype,`panel`,void 0),K([z({attribute:!1})],J.prototype,`onAction`,void 0),K([B()],J.prototype,`values`,void 0),K([B()],J.prototype,`dirty`,void 0),J=K([R(`dk-form`)],J);var kt={warm:`var(--dk-accent)`,cool:`var(--dk-c6)`,you:`var(--dk-c1)`,them:`var(--dk-c2)`,ok:`var(--dk-ok)`,err:`var(--dk-err)`},Y=class extends L{constructor(...e){super(...e),this.panel={type:`wordcloud`},this.view=`cloud`,this.fkey=null}createRenderRoot(){return this}facets(){return(this.panel.facets??[]).filter(e=>e.terms&&e.terms.length)}current(){let e=this.facets();return e.find(e=>e.key===this.fkey)??e[0]}body(){let e=this.current();if(!e?.terms?.length)return O`<div class="dk-muted">no terms for this lens</div>`;let t=e.legend&&e.legend.length?O`<div class="dk-legend">
+            ${e.legend.map(e=>O`<span><i style="background:${kt[e.tone??``]??U(0)}"></i>${e.label}</span>`)}
           </div>`:``,n=[...e.terms].sort((e,t)=>(Number(t.weight)||0)-(Number(e.weight)||0));if(this.view===`bars`){let e=n.slice(0,22);return O`${t}${et(e.map(e=>e.text),e.map(e=>Number(e.weight)||0))}`}let r=n.map(e=>Number(e.weight)||0),i=Math.max(...r,1),a=Math.min(...r,0),o=i-a||1;return O`${t}<div class="dk-cloud">
-      ${n.slice(0,70).map((e,t)=>O`<span style="font-size:${12+Math.round(24*Math.sqrt(((Number(e.weight)||0)-a)/o))}px;color:${e.tone&&St[e.tone]?St[e.tone]:U(e.group==null?t:e.group)}" title=${String(e.weight??``)}>${e.text}</span>`)}
+      ${n.slice(0,70).map((e,t)=>O`<span style="font-size:${12+Math.round(24*Math.sqrt(((Number(e.weight)||0)-a)/o))}px;color:${e.tone&&kt[e.tone]?kt[e.tone]:U(e.group==null?t:e.group)}" title=${String(e.weight??``)}>${e.text}</span>`)}
     </div>`}controls(){let e=this.facets(),t=this.current();return O`<div class="dk-wc-ctl">${e.length>1?O`<span class="dk-tg">
             ${e.map(e=>O`<button
                 class="dk-tg-b ${e.key===t?.key?`on`:``}"
@@ -139,34 +152,34 @@
     </span>`}</div>`}render(){let e=this.panel,t=this.facets().length>0;return O`<div class="dk-panel dk-full">
       ${e.title?O`<div class="dk-l">${e.title}</div>`:``}${t?this.controls():``}
       <div class="dk-wc-body">${t?this.body():O`<div class="dk-muted">no terms available</div>`}</div>
-    </div>`}};K([z({attribute:!1})],Y.prototype,`panel`,void 0),K([B()],Y.prototype,`view`,void 0),K([B()],Y.prototype,`fkey`,void 0),Y=K([R(`dk-wordcloud`)],Y);var Ct=e=>O`<div class="dk-panel dk-full dk-sec">${e.title??``}</div>`,wt=e=>O`
+    </div>`}};K([z({attribute:!1})],Y.prototype,`panel`,void 0),K([B()],Y.prototype,`view`,void 0),K([B()],Y.prototype,`fkey`,void 0),Y=K([R(`dk-wordcloud`)],Y);var At=e=>O`<div class="dk-panel dk-full dk-sec">${e.title??``}</div>`,jt=e=>O`
   <div class="dk-panel dk-stat">
     <div class="dk-l">${e.label??``}</div>
     <div class="dk-n">${W(e.value)}${e.sub==null?``:O` <small>${e.sub}</small>`}</div>
     ${e.spark&&e.spark.length?Xe(e.spark,U(e.color??0)):``}
-  </div>`,Tt=e=>{let t=Number(e.max)||0,n=Number(e.value)||0,r=e.pct==null?t?100*n/t:0:Number(e.pct),i=e.text==null?t?`${W(n)} / ${W(t)} · ${r.toFixed(1)}%`:W(n):e.text,a=`${Math.max(0,Math.min(100,r)).toFixed(1)}%`;return O`
+  </div>`,Mt=e=>{let t=Number(e.max)||0,n=Number(e.value)||0,r=e.pct==null?t?100*n/t:0:Number(e.pct),i=e.text==null?t?`${W(n)} / ${W(t)} · ${r.toFixed(1)}%`:W(n):e.text,a=`${Math.max(0,Math.min(100,r)).toFixed(1)}%`;return O`
     <div class="dk-panel dk-full">
       <div class="dk-l">${e.label??``}</div>
       <div class="dk-bar"><i style="width:${a}"></i></div>
       <div class="dk-sub">${i}</div>
-    </div>`},Et=(e,t)=>e[t]===`right`||e[t]===`num`,Dt=e=>{let t=e.columns??[],n=e.rows??[],r=e.align??[];return O`
+    </div>`},Nt=(e,t)=>e[t]===`right`||e[t]===`num`,Pt=e=>{let t=e.columns??[],n=e.rows??[],r=e.align??[];return O`
     <div class="dk-panel dk-full">
       ${e.title?O`<div class="dk-l">${e.title}</div>`:``}
       <table class="dk-tbl">
         <thead>
           <tr>
-            ${t.map((e,t)=>O`<th class=${Et(r,t)?`num`:``}>${e}</th>`)}
+            ${t.map((e,t)=>O`<th class=${Nt(r,t)?`num`:``}>${e}</th>`)}
           </tr>
         </thead>
         <tbody>
           ${n.map(e=>O`<tr>
-              ${e.map((e,t)=>O`<td class=${Et(r,t)?`num`:``}>
+              ${e.map((e,t)=>O`<td class=${Nt(r,t)?`num`:``}>
                     ${typeof e==`number`?W(e):e}
                   </td>`)}
             </tr>`)}
         </tbody>
       </table>
-    </div>`},Ot=e=>O`
+    </div>`},Ft=e=>O`
   <div class="dk-panel">
     ${e.title?O`<div class="dk-l" style="margin-bottom:6px">${e.title}</div>`:``}
     <div class="dk-kv">
@@ -174,15 +187,15 @@
             <b>${e.k}</b><span>${typeof e.v==`number`?W(e.v):e.v}</span>
           </div>`)}
     </div>
-  </div>`,kt=e=>{let t=e.text==null?(e.lines??[]).join(`
+  </div>`,It=e=>{let t=e.text==null?(e.lines??[]).join(`
 `):e.text;return O`
     <div class="dk-panel dk-full">
       ${e.title?O`<div class="dk-l">${e.title}</div>`:``}
       <pre class="dk-log">${t}</pre>
-    </div>`},At=e=>O`<div class="dk-panel"><span class="dk-pill ${e.tone??``}">${e.text??``}</span></div>`,jt=e=>{let t=String(e.text??``).split(/\n\s*\n/).filter(e=>e.trim());return O`
+    </div>`},Lt=e=>O`<div class="dk-panel"><span class="dk-pill ${e.tone??``}">${e.text??``}</span></div>`,Rt=e=>{let t=String(e.text??``).split(/\n\s*\n/).filter(e=>e.trim());return O`
     <div class="dk-panel dk-full dk-prose">
       ${e.title?O`<div class="dk-l">${e.title}</div>`:``}${t.map(e=>O`<p>${e.trim()}</p>`)}
-    </div>`},Mt=e=>O`<div class="dk-panel dk-full">${Ke(e.html??``)}</div>`,Nt=(e,t)=>O`
+    </div>`},zt=e=>O`<div class="dk-panel dk-full">${Ke(e.html??``)}</div>`,Bt=(e,t)=>O`
   <div class="dk-panel dk-full">
     ${e.title?O`<div class="dk-l">${e.title}</div>`:``}
     <div class="dk-acts">
@@ -193,9 +206,9 @@
           ${e.label??e.action??`action`}
         </button>`)}
     </div>
-  </div>`;function Pt(e,t){try{switch(e.type){case`section`:return Ct(e);case`stat`:return wt(e);case`progress`:return Tt(e);case`chart`:return tt(e);case`table`:return Dt(e);case`kv`:return Ot(e);case`log`:return kt(e);case`badge`:return At(e);case`prose`:return jt(e);case`html`:return Mt(e);case`actions`:return Nt(e,t);case`button`:{let n=e;return Nt({type:`actions`,title:n.title,buttons:[{label:n.label,action:n.action,payload:n.payload,tone:n.tone}]},t)}case`form`:return O`<dk-form .panel=${e} .onAction=${t}></dk-form>`;case`wordcloud`:return O`<dk-wordcloud .panel=${e}></dk-wordcloud>`;case`dag`:return O`<dk-dag .panel=${e} .onAction=${t}></dk-dag>`;default:return O`<div class="dk-panel dk-full">
+  </div>`;function Vt(e,t){try{switch(e.type){case`section`:return At(e);case`stat`:return jt(e);case`progress`:return Mt(e);case`chart`:return tt(e);case`table`:return Pt(e);case`kv`:return Ft(e);case`log`:return It(e);case`badge`:return Lt(e);case`prose`:return Rt(e);case`html`:return zt(e);case`actions`:return Bt(e,t);case`button`:{let n=e;return Bt({type:`actions`,title:n.title,buttons:[{label:n.label,action:n.action,payload:n.payload,tone:n.tone}]},t)}case`form`:return O`<dk-form .panel=${e} .onAction=${t}></dk-form>`;case`wordcloud`:return O`<dk-wordcloud .panel=${e}></dk-wordcloud>`;case`dag`:return O`<dk-dag .panel=${e} .onAction=${t}></dk-dag>`;default:return O`<div class="dk-panel dk-full">
           <span class="dk-muted">unknown atom: ${e.type}</span>
-        </div>`}}catch(t){let n=t instanceof Error?t.message:String(t);return O`<div class="dk-panel dk-full dk-err">atom error (${e.type}): ${n}</div>`}}var Ft=`
+        </div>`}}catch(t){let n=t instanceof Error?t.message:String(t);return O`<div class="dk-panel dk-full dk-err">atom error (${e.type}): ${n}</div>`}}var Ht=`
 /* Two colour roles, kept apart on purpose. SEMANTIC tokens (accent/ok/warn/err/muted/ready)
    mean something: a status, a verdict. CATEGORICAL tokens (c1..c6) only separate one series
    from the next and carry no meaning. They used to be the same literals -- c1 was accent,
@@ -204,13 +217,19 @@
    values are unchanged here; only the ramp and accent2 move. */
 .dk-root{--dk-bg:#16140f;--dk-panel:#1f1b15;--dk-fg:#ece6d8;--dk-muted:#9a9384;--dk-line:#352f25;--dk-edge:#776d5c;
   --dk-accent:#d98a4f;--dk-accent2:#e8a765;--dk-ok:#6fa8a0;--dk-warn:#cda94e;--dk-err:#d4707a;--dk-ready:#7f9bd1;--dk-crit:#e35d44;
+  /* a search-hit wash: a surface tint, never a status. It is the SECOND cue -- the non-hits
+     dimming is the loud one -- so it is pitched to separate from --dk-panel (1.57:1 dark,
+     1.54:1 light, measured) without swamping a graph where most units match, and to stay well
+     clear of the label (8.8:1 dark, 11.1:1 light) so a hit reads no worse than any other unit.
+     It carries the highlight alone only while hover has taken the dimming away. */
+  --dk-find:#4a3a23;
   --dk-c1:#8fbf7e;--dk-c2:#c495d8;--dk-c3:#d59bb4;--dk-c4:#6e8390;--dk-c5:#c9a97e;--dk-c6:#5fb9b2;
   color:var(--dk-fg);background:var(--dk-bg);font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;
   box-sizing:border-box;padding:18px 20px;display:block;min-height:100%}
 .dk-root *{box-sizing:border-box}
 html[data-theme=light] .dk-root,.dk-root[data-theme=light]{--dk-bg:#faf8f3;--dk-panel:#fff;--dk-fg:#1c1b19;
   --dk-muted:#7a756c;--dk-line:#e7e2d8;--dk-edge:#8b8478;--dk-accent:#b4541f;--dk-accent2:#c9762c;--dk-ok:#3f807a;
-  --dk-warn:#9a7a18;--dk-err:#b1414f;--dk-ready:#41639b;--dk-crit:#b83227;--dk-c1:#4a7a3a;--dk-c2:#7a5bb0;--dk-c3:#a0507e;
+  --dk-warn:#9a7a18;--dk-err:#b1414f;--dk-ready:#41639b;--dk-crit:#b83227;--dk-find:#f2ca8b;--dk-c1:#4a7a3a;--dk-c2:#7a5bb0;--dk-c3:#a0507e;
   --dk-c4:#4a6670;--dk-c5:#8a6134;--dk-c6:#2f7f88}
 .dk-title{font-size:16px;font-weight:600;letter-spacing:.02em;margin:0 0 12px}
 .dk-panels{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;align-items:start}
@@ -261,6 +280,14 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
 .dk-f textarea{min-height:84px;resize:vertical} .dk-fcheck{flex-direction:row;align-items:center;gap:7px}
 /* stateful atoms wrap a dk-full panel; display:contents promotes that panel to the grid item so it spans the row */
 dk-dag,dk-form,dk-wordcloud{display:contents}
+/* title on the left, search on the right; the search drops under the title when the panel is
+   too narrow to hold both. */
+.dk-dag-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px}
+.dk-dag-find{display:flex;align-items:center;gap:8px}
+.dk-dag-q{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius:6px;color:var(--dk-fg);font:inherit;font-size:12px;padding:4px 9px;width:190px;max-width:42vw}
+.dk-dag-q:focus{outline:none;border-color:var(--dk-accent)}
+.dk-dag-tally{font-size:11px;color:var(--dk-muted);font-family:ui-monospace,monospace;min-width:52px}
+.dk-dag-tally.none{color:var(--dk-warn)}
 .dk-dag-legend{margin:6px 0 0}
 .dk-dag-elig-key{background:transparent!important;border:2px solid var(--dk-ready);border-radius:3px}
 .dk-dag-crit-key{background:var(--dk-crit)!important}
@@ -288,6 +315,9 @@ svg.dk-dag{display:block}
 .dk-dag-node.act{cursor:pointer}
 .dk-dag-node.dim{opacity:.3}
 .dk-dag-box{fill:var(--dk-panel);stroke:var(--dk-line);stroke-width:1}
+/* A search hit tints its fill, so it survives every stroke the node may also be carrying
+   (ready ring, critical outline, hover, selection) instead of competing with them. */
+.dk-dag-node.match .dk-dag-box{fill:var(--dk-find)}
 .dk-dag-box.elig{stroke:var(--dk-ready);stroke-width:2}
 .dk-dag-node:hover .dk-dag-box{stroke:var(--dk-accent)}
 /* Hover must not eat the ready ring. The plain hover rule above is (0,3,0) and outranked the
@@ -325,19 +355,19 @@ svg.dk-dag{display:block}
 .dk-dag-chips{display:flex;flex-wrap:wrap;gap:5px}
 .dk-dag-chip{font-family:ui-monospace,monospace;font-size:11px;padding:2px 8px;border:1px solid var(--dk-line);border-radius:5px;background:var(--dk-bg);color:var(--dk-fg);cursor:pointer}
 .dk-dag-chip:hover{border-color:var(--dk-accent);color:var(--dk-accent)}
-.dk-dag-insp .dk-l{font-size:10px;color:var(--dk-muted);text-transform:uppercase;letter-spacing:.06em}`;function It(){if(typeof document>`u`||document.getElementById(`dk-css`))return;let e=document.createElement(`style`);e.id=`dk-css`,e.textContent=Ft,(document.head??document.documentElement).appendChild(e)}var Lt=`\0`,Rt=(e,t,n)=>typeof t.id==`string`?`${e}${Lt}id:${t.id}`:`${e}${Lt}ix:${n}`;function zt(e,t,n,r=``){It(),t.classList.add(`dk-root`);let i=e.panels??[];I(O`
+.dk-dag-insp .dk-l{font-size:10px;color:var(--dk-muted);text-transform:uppercase;letter-spacing:.06em}`;function Ut(){if(typeof document>`u`||document.getElementById(`dk-css`))return;let e=document.createElement(`style`);e.id=`dk-css`,e.textContent=Ht,(document.head??document.documentElement).appendChild(e)}var Wt=`\0`,Gt=(e,t,n)=>typeof t.id==`string`?`${e}${Wt}id:${t.id}`:`${e}${Wt}ix:${n}`;function Kt(e,t,n,r=``){Ut(),t.classList.add(`dk-root`);let i=e.panels??[];I(O`
       ${e.title?O`<div class="dk-title">${e.title}</div>`:``}
       <div class="dk-panels">
-        ${We(i,(e,t)=>Rt(r,e,t),e=>Pt(e,n))}
+        ${We(i,(e,t)=>Gt(r,e,t),e=>Vt(e,n))}
       </div>
-    `,t)}var Bt=250,Vt=3e3;function Ht(e,t){let n=Number(e?.refresh_ms);if(Number.isFinite(n)&&n>0)return Math.max(Bt,n);let r=Number(t);return Number.isFinite(r)&&r>0?Math.max(Bt,r):Vt}function Ut(e){let t=(typeof e.mount==`string`?document.querySelector(e.mount):e.mount)??document.body,{actionUrl:n}=e,r=e.onAction??(n?(e,t)=>{fetch(n,{method:`POST`,headers:{"Content-Type":`application/json`},body:JSON.stringify({action:e,payload:t})}).catch(()=>{})}:void 0),i=!1,a,o=null;I(j,t);let s=async()=>{if(!i){try{let n=await(await fetch(e.renderUrl,{cache:`no-store`})).json();if(i)return;o=n,zt(n,t,r,e.renderUrl)}catch{}a=setTimeout(()=>void s(),Ht(o,e.refreshMs))}};return s(),{stop:()=>{i=!0,a&&clearTimeout(a),I(j,t)}}}var X=e=>e.status===`live`;function Z(e){if(e.state===`starting`)return{word:`starting…`,cls:`starting`};if(e.state===`unhealthy`)return{word:`unhealthy`,cls:`unhealthy`};if(X(e))return{word:`live`,cls:`live`};let t=e.last_stop_reason;return t&&t.kind===`crash`?{word:`crashed${t.exit==null?``:` (exit ${t.exit})`}`,cls:`crash`}:t&&t.kind===`port-busy`?{word:`port busy`,cls:`crash`}:{word:`stopped`,cls:`stopped`}}var Wt=e=>!X(e)&&(e.cmd?.length??0)>0,Gt=e=>X(e)&&!!e.controllable&&e.stop!==`leave`,Kt={start:`starting…`,stop:`stopping…`,restart:`restarting…`},qt=e=>Kt[e]??Kt.start,Jt=class extends L{constructor(...e){super(...e),this.entry=null,this.pending=new Map,this.mountSpec=e=>Ut(e),this.framed=null,this.handle=null}createRenderRoot(){return this}emit(e,t){this.dispatchEvent(new CustomEvent(`action`,{detail:{verb:e,id:t},bubbles:!0,composed:!0}))}pendingBtn(e){let t=this.pending.get(e.id);return t?O`<button class="btn pending" disabled>${qt(t)}</button>`:null}stopMount(){this.handle&&=(this.handle.stop(),null)}disconnectedCallback(){super.disconnectedCallback(),this.stopMount()}updated(){let e=this.querySelector(`#dkhost`),t=this.entry,n=e&&t?`${t.id}:${t.render??``}`:null;n!==this.framed&&(this.framed=n,this.stopMount(),e&&t&&(this.handle=this.mountSpec({renderUrl:`/api/render?id=${encodeURIComponent(t.id)}`,mount:e,onAction:(e,n)=>this.dispatchEvent(new CustomEvent(`spec-action`,{detail:{id:t.id,action:e,payload:n},bubbles:!0,composed:!0}))})))}head(e){let t=Z(e);return O`<div class="dhead">
+    `,t)}var qt=250,Jt=3e3;function Yt(e,t){let n=Number(e?.refresh_ms);if(Number.isFinite(n)&&n>0)return Math.max(qt,n);let r=Number(t);return Number.isFinite(r)&&r>0?Math.max(qt,r):Jt}function Xt(e){let t=(typeof e.mount==`string`?document.querySelector(e.mount):e.mount)??document.body,{actionUrl:n}=e,r=e.onAction??(n?(e,t)=>{fetch(n,{method:`POST`,headers:{"Content-Type":`application/json`},body:JSON.stringify({action:e,payload:t})}).catch(()=>{})}:void 0),i=!1,a,o=null;I(j,t);let s=async()=>{if(!i){try{let n=await(await fetch(e.renderUrl,{cache:`no-store`})).json();if(i)return;o=n,Kt(n,t,r,e.renderUrl)}catch{}a=setTimeout(()=>void s(),Yt(o,e.refreshMs))}};return s(),{stop:()=>{i=!0,a&&clearTimeout(a),I(j,t)}}}var X=e=>e.status===`live`;function Z(e){if(e.state===`starting`)return{word:`starting…`,cls:`starting`};if(e.state===`unhealthy`)return{word:`unhealthy`,cls:`unhealthy`};if(X(e))return{word:`live`,cls:`live`};let t=e.last_stop_reason;return t&&t.kind===`crash`?{word:`crashed${t.exit==null?``:` (exit ${t.exit})`}`,cls:`crash`}:t&&t.kind===`port-busy`?{word:`port busy`,cls:`crash`}:{word:`stopped`,cls:`stopped`}}var Zt=e=>!X(e)&&(e.cmd?.length??0)>0,Qt=e=>X(e)&&!!e.controllable&&e.stop!==`leave`,$t={start:`starting…`,stop:`stopping…`,restart:`restarting…`},en=e=>$t[e]??$t.start,tn=class extends L{constructor(...e){super(...e),this.entry=null,this.pending=new Map,this.mountSpec=e=>Xt(e),this.framed=null,this.handle=null}createRenderRoot(){return this}emit(e,t){this.dispatchEvent(new CustomEvent(`action`,{detail:{verb:e,id:t},bubbles:!0,composed:!0}))}pendingBtn(e){let t=this.pending.get(e.id);return t?O`<button class="btn pending" disabled>${en(t)}</button>`:null}stopMount(){this.handle&&=(this.handle.stop(),null)}disconnectedCallback(){super.disconnectedCallback(),this.stopMount()}updated(){let e=this.querySelector(`#dkhost`),t=this.entry,n=e&&t?`${t.id}:${t.render??``}`:null;n!==this.framed&&(this.framed=n,this.stopMount(),e&&t&&(this.handle=this.mountSpec({renderUrl:`/api/render?id=${encodeURIComponent(t.id)}`,mount:e,onAction:(e,n)=>this.dispatchEvent(new CustomEvent(`spec-action`,{detail:{id:t.id,action:e,payload:n},bubbles:!0,composed:!0}))})))}head(e){let t=Z(e);return O`<div class="dhead">
       <h2>${e.name??e.id}</h2>
       <span class="pill ${t.cls}">${t.word}</span>
       <span class="why">${e.blurb??``}</span>
       <div class="acts">
         ${this.pendingBtn(e)??O`
-          ${Wt(e)?O`<button class="btn" @click=${()=>this.emit(`start`,e.id)}>Start</button>`:``}
-          ${Gt(e)?O`<button class="btn stop" @click=${()=>this.emit(`stop`,e.id)}>Stop</button>`:``}
+          ${Zt(e)?O`<button class="btn" @click=${()=>this.emit(`start`,e.id)}>Start</button>`:``}
+          ${Qt(e)?O`<button class="btn stop" @click=${()=>this.emit(`stop`,e.id)}>Stop</button>`:``}
           ${e.controllable?O`<button class="btn" @click=${()=>this.emit(`restart`,e.id)}>Restart</button>`:``}
         `}
         ${e.port?O`<a class="btn" href="http://127.0.0.1:${e.port}/" target="_blank" rel="noreferrer">open ↗</a>`:``}
@@ -356,13 +386,13 @@ svg.dk-dag{display:block}
     </div>`:O`<div class="pane">
         <h3>${Z(e).word}</h3>
         <div>${e.why??``}</div>
-        ${this.pendingBtn(e)??(Wt(e)?O`<button class="btn" @click=${()=>this.emit(`start`,e.id)}>Start</button>`:O`<div>Start it yourself; dod will adopt the port.</div>`)}
-      </div>`}render(){let e=this.entry;return e?O`${this.head(e)}<div class="body">${this.body(e)}</div>`:O`<div class="empty">Select a project on the left.</div>`}};K([z({attribute:!1})],Jt.prototype,`entry`,void 0),K([z({attribute:!1})],Jt.prototype,`pending`,void 0),Jt=K([R(`dod-detail`)],Jt);var Q=class extends L{constructor(...e){super(...e),this.entries=[],this.selected=null,this.pending=new Map,this.dragId=null}createRenderRoot(){return this}emit(e,t){this.dispatchEvent(new CustomEvent(e,{detail:t,bubbles:!0,composed:!0}))}button(e){let t=this.pending.get(e.id);return t?O`<button class="btn pending" disabled>${qt(t)}</button>`:Gt(e)?O`<button
+        ${this.pendingBtn(e)??(Zt(e)?O`<button class="btn" @click=${()=>this.emit(`start`,e.id)}>Start</button>`:O`<div>Start it yourself; dod will adopt the port.</div>`)}
+      </div>`}render(){let e=this.entry;return e?O`${this.head(e)}<div class="body">${this.body(e)}</div>`:O`<div class="empty">Select a project on the left.</div>`}};K([z({attribute:!1})],tn.prototype,`entry`,void 0),K([z({attribute:!1})],tn.prototype,`pending`,void 0),tn=K([R(`dod-detail`)],tn);var Q=class extends L{constructor(...e){super(...e),this.entries=[],this.selected=null,this.pending=new Map,this.dragId=null}createRenderRoot(){return this}emit(e,t){this.dispatchEvent(new CustomEvent(e,{detail:t,bubbles:!0,composed:!0}))}button(e){let t=this.pending.get(e.id);return t?O`<button class="btn pending" disabled>${en(t)}</button>`:Qt(e)?O`<button
         class="btn stop"
         @click=${t=>{t.stopPropagation(),this.emit(`action`,{verb:`stop`,id:e.id})}}
       >
         Stop
-      </button>`:Wt(e)?O`<button
+      </button>`:Zt(e)?O`<button
         class="btn"
         @click=${t=>{t.stopPropagation(),this.emit(`action`,{verb:`start`,id:e.id})}}
       >
@@ -380,7 +410,7 @@ svg.dk-dag{display:block}
         <div class="desc">${e.blurb??``}</div>
       </div>`})}`:O`<div class="empty" style="padding:30px">
         No projects. Add a dod.project.json to a project, or register one with the CLI.
-      </div>`}};K([z({attribute:!1})],Q.prototype,`entries`,void 0),K([z()],Q.prototype,`selected`,void 0),K([z({attribute:!1})],Q.prototype,`pending`,void 0),Q=K([R(`dod-list`)],Q);function Yt(e,t,n){let r=[...e],i=r.indexOf(t),a=r.indexOf(n);if(i<0||a<0||t===n)return r;let[o]=r.splice(i,1);return r.splice(a,0,o),r}var $=class extends L{constructor(...t){super(...t),this.api=new e(``),this.reload=()=>location.reload(),this.entries=[],this.selected=null,this.lastSel=null,this.pending=new Map,this.stopped=!1}createRenderRoot(){return this}start(e=2e3){this.stopped=!1;let t=async()=>{this.stopped||(await this.refresh(),this.timer=setTimeout(()=>void t(),e))};t()}disconnectedCallback(){super.disconnectedCallback(),this.stopped=!0,this.timer&&clearTimeout(this.timer)}select(e){this.selected=e,this.lastSel=e?this.entries.find(t=>t.id===e)??null:null}async refresh(){let e=await this.api.state();if(!e.ok)return;this.entries=e.entries.filter(e=>e.state!==`archived`);let t=this.entries.find(e=>e.id===this.selected)??null;t?this.lastSel=t:this.selected&&this.entries.length>0&&this.select(null)}async act(e,t){if(!this.pending.has(t)){this.pending=new Map(this.pending).set(t,e);try{if((await this.api.post(e,{id:t})).error===`forbidden`){this.reload();return}await this.refresh()}finally{let e=new Map(this.pending);e.delete(t),this.pending=e}}}async specAction(e){(await this.api.post(`action`,{id:e.id,action:e.action,payload:e.payload})).error===`forbidden`&&this.reload()}async doReorder(e,t){let n=Yt(this.entries.map(e=>e.id),e,t),r=new Map(n.map((e,t)=>[e,t]));this.entries=[...this.entries].sort((e,t)=>(r.get(e.id)??0)-(r.get(t.id)??0)),await this.api.post(`reorder`,{order:n})}render(){let e=this.entries.filter(X).length,t=this.entries.find(e=>e.id===this.selected)??this.lastSel;return O`
+      </div>`}};K([z({attribute:!1})],Q.prototype,`entries`,void 0),K([z()],Q.prototype,`selected`,void 0),K([z({attribute:!1})],Q.prototype,`pending`,void 0),Q=K([R(`dod-list`)],Q);function nn(e,t,n){let r=[...e],i=r.indexOf(t),a=r.indexOf(n);if(i<0||a<0||t===n)return r;let[o]=r.splice(i,1);return r.splice(a,0,o),r}var $=class extends L{constructor(...t){super(...t),this.api=new e(``),this.reload=()=>location.reload(),this.entries=[],this.selected=null,this.lastSel=null,this.pending=new Map,this.stopped=!1}createRenderRoot(){return this}start(e=2e3){this.stopped=!1;let t=async()=>{this.stopped||(await this.refresh(),this.timer=setTimeout(()=>void t(),e))};t()}disconnectedCallback(){super.disconnectedCallback(),this.stopped=!0,this.timer&&clearTimeout(this.timer)}select(e){this.selected=e,this.lastSel=e?this.entries.find(t=>t.id===e)??null:null}async refresh(){let e=await this.api.state();if(!e.ok)return;this.entries=e.entries.filter(e=>e.state!==`archived`);let t=this.entries.find(e=>e.id===this.selected)??null;t?this.lastSel=t:this.selected&&this.entries.length>0&&this.select(null)}async act(e,t){if(!this.pending.has(t)){this.pending=new Map(this.pending).set(t,e);try{if((await this.api.post(e,{id:t})).error===`forbidden`){this.reload();return}await this.refresh()}finally{let e=new Map(this.pending);e.delete(t),this.pending=e}}}async specAction(e){(await this.api.post(`action`,{id:e.id,action:e.action,payload:e.payload})).error===`forbidden`&&this.reload()}async doReorder(e,t){let n=nn(this.entries.map(e=>e.id),e,t),r=new Map(n.map((e,t)=>[e,t]));this.entries=[...this.entries].sort((e,t)=>(r.get(e.id)??0)-(r.get(t.id)??0)),await this.api.post(`reorder`,{order:n})}render(){let e=this.entries.filter(X).length,t=this.entries.find(e=>e.id===this.selected)??this.lastSel;return O`
       <header>
         <b>dod</b><span class="tagline">project control</span>
         <span class="spacer"></span>
@@ -400,4 +430,4 @@ svg.dk-dag{display:block}
         @action=${e=>void this.act(e.detail.verb,e.detail.id)}
         @spec-action=${e=>void this.specAction(e.detail)}
       ></dod-detail>
-    `}};K([B()],$.prototype,`entries`,void 0),K([B()],$.prototype,`selected`,void 0),K([B()],$.prototype,`pending`,void 0),$=K([R(`dod-app`)],$);function Xt(t=document.body){let n=document.createElement(`dod-app`);return n.api=new e(window.TOKEN??``),t.appendChild(n),n.start(),n}Xt()})();
+    `}};K([B()],$.prototype,`entries`,void 0),K([B()],$.prototype,`selected`,void 0),K([B()],$.prototype,`pending`,void 0),$=K([R(`dod-app`)],$);function rn(t=document.body){let n=document.createElement(`dod-app`);return n.api=new e(window.TOKEN??``),t.appendChild(n),n.start(),n}rn()})();

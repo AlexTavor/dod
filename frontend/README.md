@@ -23,7 +23,8 @@ dashkit.renderSpec(
 
 Atoms cover the common dashboard shapes: `stat`, `progress`, `table`, `kv`, `log`, `badge`,
 `prose`, `chart` (line / area / bars / stacked / hbar / diverging / spark), `actions` / `button`,
-`form`, `wordcloud`, and `dag` (a fix-dependency graph). An unknown atom renders as a labelled
+`form`, `wordcloud`, and `dag` (a fix-dependency graph, searchable: a query tints the hits, greys
+the rest, and Enter / `n` / `N` step through them). An unknown atom renders as a labelled
 placeholder, never an error. The build emits a self-contained IIFE that assigns `window.dashkit`
 (`renderSpec`, `mount`, `version`), so a plain `<script>` tag is all a page needs.
 
@@ -55,7 +56,8 @@ npm run build:web  # build both bundles and copy them into ../src/dod/web
 ```
 src/
   types.ts          the spec contract (the Panel union)
-  dashkit/          the renderer: atoms, charts, dag-layout, dag-model, dk-* elements, theme
+  dashkit/          the renderer: atoms, charts, dag-layout, dag-model, dag-search,
+                    dk-* elements, theme
   app/              the admin UI (dod-list, dod-detail, dod-app) + a typed API client
 demo/               mock-data playground
 ```

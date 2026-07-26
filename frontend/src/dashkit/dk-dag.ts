@@ -4,6 +4,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import type { ActionHandler, DagNode, DagPanel } from '../types';
 import { layoutDag, type PlacedEdge } from './dag-layout';
 import { adjacency, bucketOf, frontier, lineage, type Adjacency, type Bucket } from './dag-model';
+import { matches, ordered } from './dag-search';
 import { trunc } from './format';
 
 // bucket → CSS variable, plus the legend rows. Presentation only: the status → bucket
@@ -33,15 +34,37 @@ function edgePath(e: PlacedEdge): string {
   return `M${e.x1},${e.y1} C${e.x1 + h},${e.y1} ${e.x2 - h},${e.y2} ${e.x2},${e.y2}`;
 }
 
+/** Keys that step or clear the search from anywhere on the page, and what they do. The chord
+ *  is spelled by `ev.key`, so an uppercase N already carries the shift. Data-by-key per
+ *  CLAUDE.md. */
+const FIND_KEYS: Record<string, 'next' | 'prev' | 'clear'> = {
+  n: 'next',
+  N: 'prev',
+  Escape: 'clear',
+};
+
+/** The same shortcuts read back to the user, as the search box's tooltip. Nothing else on the
+ *  panel announces them, so a key that moves here must be spelled out here too. */
+const FIND_HINT = 'Enter or n: next match · Shift+Enter or N: previous · Esc: clear';
+
+/** Whether a keystroke is being typed into a field, in which case it is that field's, never a
+ *  shortcut. Covers our own search box, so `n` types an n while you are writing the query. */
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as Element | null;
+  return !!el?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable=false])');
+}
+
 /**
  * The `dag` atom: a dependency graph on an earliest-start axis. A node sits where it could
  * begin (the weighted length of the longest chain behind it), coloured by status; an edge runs
  * prerequisite → dependent. Units that can start now (not begun, every prerequisite done) get a
  * "ready" ring; the zero-float critical path is drawn in the redline colour; a float rail
  * trails each node that can slip. Hover highlights lineage; clicking a node opens an inspector
- * with its full detail and its prerequisites/dependents as links you can follow. Holds hover
- * and selection across render polls. Light DOM. Geometry comes from dag-layout, graph
- * derivations from dag-model; this element only places and paints.
+ * with its full detail and its prerequisites/dependents as links you can follow. Free-text
+ * search over the whole unit (label, status and everything the inspector would show) tints the
+ * hits and greys the rest, and Enter / n / N step through them. Holds hover, selection and the
+ * query across render polls. Light DOM. Geometry comes from dag-layout, graph derivations from
+ * dag-model, the matching rule from dag-search; this element only places and paints.
  */
 @customElement('dk-dag')
 export class DkDag extends LitElement {
@@ -49,9 +72,28 @@ export class DkDag extends LitElement {
   @property({ attribute: false }) onAction?: ActionHandler;
   @state() private hover: string | null = null;
   @state() private sel: string | null = null;
+  @state() private q = '';
+  /** Which hit is selected, as an index into `hits`; -1 until you step. */
+  @state() private hitIx = -1;
+
+  /** The last render's hits, in axis order, and where each node was drawn. Written by `render`
+   *  and read by the key handlers, which fire outside a render and must not re-derive a layout
+   *  to answer "what is the next hit" or "where is it". */
+  private hits: string[] = [];
+  private pos = new Map<string, { x: number; y: number; w: number; h: number }>();
 
   protected createRenderRoot(): HTMLElement {
     return this;
+  }
+
+  connectedCallback(): void {
+    super.connectedCallback();
+    document.addEventListener('keydown', this.onKey);
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener('keydown', this.onKey);
+    super.disconnectedCallback();
   }
 
   private nodes(): DagNode[] {
@@ -86,7 +128,15 @@ export class DkDag extends LitElement {
       layout.edges,
     );
     const ready = frontier(nodes, adj.up);
-    const lit = this.hover ? lineage(this.hover, adj) : null;
+    const hit = matches(nodes, this.q);
+    this.hits = ordered(hit, layout.nodes);
+    this.pos = new Map(layout.nodes.map((p) => [p.id, { x: p.x, y: p.y, w: p.w, h: p.h }]));
+
+    // What stays bright. Hover wins while the pointer is on a node: reaching for a hit to ask
+    // what it waits on must show the prerequisites, and those are usually not themselves hits.
+    // The pointer leaves, the search view comes back. A searched-but-empty set lights nothing,
+    // so "no match" reads as the whole graph greying rather than as no search at all.
+    const lit = this.hover ? lineage(this.hover, adj) : this.q.trim() ? hit : null;
     // A selection from an earlier poll may name a unit the plan no longer has; drop it.
     const sel = this.sel && byId.has(this.sel) ? this.sel : null;
 
@@ -115,7 +165,12 @@ export class DkDag extends LitElement {
       const dim = lit ? !lit.has(pn.id) : false;
       const act = n.action;
       const on = sel === pn.id;
-      const cls = `dk-dag-node act${dim ? ' dim' : ''}${pn.critical ? ' crit' : ''}${on ? ' sel' : ''}`;
+      // `match` tints the box FILL. Ready, critical and selected all speak through the stroke,
+      // and a fourth stroke rule would have to outrank or yield to each of them; the fill is
+      // free, so a hit stays visibly a hit while it is also ready, critical, hovered or picked.
+      const cls = `dk-dag-node act${dim ? ' dim' : ''}${pn.critical ? ' crit' : ''}${
+        on ? ' sel' : ''
+      }${hit.has(pn.id) ? ' match' : ''}`;
       const chars = Math.max(4, Math.floor((pn.w - 22) / 6.2));
       return svg`<g
         class=${cls}
@@ -135,7 +190,8 @@ export class DkDag extends LitElement {
     });
 
     return html`<div class="dk-panel dk-full">
-      ${title}${this.legend()}
+      <div class="dk-dag-head">${title}${this.finder()}</div>
+      ${this.legend()}
       <div class="dk-dag-body">
         <div
           class="dk-dag-scroll"
@@ -164,6 +220,95 @@ export class DkDag extends LitElement {
       </div>
     </div>`;
   }
+
+  /** Which of the four search states you are in, in words. A query that matches nothing has
+   *  nothing else to show for itself — the graph just greys — so saying so is the only thing
+   *  that separates "searched, found none" from "the box ignored me". */
+  private tally(): string {
+    const n = this.hits.length;
+    if (!this.q.trim()) return ''; // not searching
+    if (!n) return 'no match';
+    if (this.hitIx < 0) return `${n} hit${n === 1 ? '' : 's'}`; // found, not stepping yet
+    return `${this.hitIx + 1}/${n}`; // on this one of them
+  }
+
+  /** The search box and its tally. */
+  private finder(): TemplateResult {
+    const none = !!this.q.trim() && !this.hits.length;
+    return html`<div class="dk-dag-find">
+      <input
+        class="dk-dag-q"
+        type="search"
+        placeholder="search units"
+        title=${FIND_HINT}
+        .value=${this.q}
+        @input=${(ev: Event) => this.query((ev.target as HTMLInputElement).value)}
+        @keydown=${(ev: KeyboardEvent) => this.onFieldKey(ev)}
+      />
+      <span class="dk-dag-tally ${none ? 'none' : ''}">${this.tally()}</span>
+    </div>`;
+  }
+
+  /** Adopt a new query. The step position resets: hit 3 of the old query is not hit 3 of this
+   *  one, and carrying the index over would land the next `n` somewhere arbitrary. */
+  private query(q: string): void {
+    this.q = q;
+    this.hitIx = -1;
+  }
+
+  /** Move `delta` hits and select where you land, wrapping at both ends. Selecting is the
+   *  point: the inspector then shows the unit you stepped onto without a second click. */
+  private step(delta: number): void {
+    const n = this.hits.length;
+    if (!n) return;
+    // From "no position yet", forward starts at the first hit and backward at the last.
+    const from = this.hitIx >= 0 ? this.hitIx : delta > 0 ? -1 : 0;
+    this.hitIx = (((from + delta) % n) + n) % n;
+    this.sel = this.hits[this.hitIx];
+    this.reveal(this.sel);
+  }
+
+  /** Bring a node into the scroll box, centred. A step that selects a unit off-screen would
+   *  otherwise look like nothing happened: the tally counts up and the graph sits still.
+   *
+   *  Instant, not `behavior: 'smooth'`. Smooth is decoration and it is not always delivered —
+   *  a page whose tab or pane is not being painted runs no scroll animation, so the smooth
+   *  version left the graph at scroll 0 while the tally read 13/13 and the unit it named was
+   *  1400px off the right edge. Arriving is the requirement; gliding there is not. */
+  private reveal(id: string): void {
+    const box = this.pos.get(id);
+    const sc = this.querySelector<HTMLElement>('.dk-dag-scroll');
+    if (!box || !sc || typeof sc.scrollTo !== 'function') return;
+    sc.scrollTo({
+      left: box.x + box.w / 2 - sc.clientWidth / 2,
+      top: box.y + box.h / 2 - sc.clientHeight / 2,
+    });
+  }
+
+  /** Keys inside the search field: Enter steps forward, Shift+Enter back, Escape clears. The
+   *  field keeps focus on Enter so you can keep stepping; Escape gives it up with the query. */
+  private onFieldKey(ev: KeyboardEvent): void {
+    if (ev.key === 'Enter') this.step(ev.shiftKey ? -1 : 1);
+    else if (ev.key === 'Escape') {
+      this.query('');
+      (ev.target as HTMLElement).blur();
+    } else return;
+    ev.preventDefault();
+  }
+
+  /** n / N / Escape from anywhere on the page, so you can step without going back to the box.
+   *  Bound at the document because the graph itself takes no focus. Two guards keep it from
+   *  stealing a keystroke: it does nothing unless a search is up (a bare `n` on a page with no
+   *  query means nothing here), and never fires while the target is a field. */
+  private readonly onKey = (ev: KeyboardEvent): void => {
+    if (!this.q.trim() || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (isTyping(ev.target)) return;
+    const act = FIND_KEYS[ev.key];
+    if (!act) return;
+    if (act === 'clear') this.query('');
+    else this.step(act === 'next' ? 1 : -1);
+    ev.preventDefault();
+  };
 
   /** The detail pane for the selected node: an overview that reads top to bottom — status,
    *  the label/value facts, the brief, the references you can follow to a source, and the
