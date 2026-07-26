@@ -1,7 +1,7 @@
 // A typed client for the dod control API. State-changing POSTs carry the per-boot token
 // (the agent-control trust boundary). Injectable fetch keeps it unit-testable.
 
-import type { ActionResult, ApiState } from './types';
+import type { ActionResult, ApiState, StateResult } from './types';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -11,14 +11,18 @@ export class DodApi {
     private readonly doFetch: FetchLike = (input, init) => fetch(input, init),
   ) {}
 
-  /** GET /api/state. Returns empty lists on any failure so the poller never wedges. */
-  async state(): Promise<ApiState> {
+  /**
+   * GET /api/state. Never throws, so the poller cannot wedge — but it reports whether the
+   * poll succeeded, because the caller has to tell "dod said nothing is registered" from
+   * "dod did not answer". Both used to arrive as an empty list.
+   */
+  async state(): Promise<StateResult> {
     try {
       const r = await this.doFetch('/api/state');
       const data = (await r.json()) as Partial<ApiState>;
-      return { entries: data.entries ?? [], discovered: data.discovered ?? [] };
+      return { ok: true, entries: data.entries ?? [], discovered: data.discovered ?? [] };
     } catch {
-      return { entries: [], discovered: [] };
+      return { ok: false, entries: [], discovered: [] };
     }
   }
 

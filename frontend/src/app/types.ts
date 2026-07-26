@@ -62,3 +62,13 @@ export interface ApiState {
   entries: State[];
   discovered: Discovered[];
 }
+
+/**
+ * What `DodApi.state()` returns: the payload plus whether the poll actually reached dod.
+ * A dropped poll and an empty board are not the same fact, and the UI must not act on them
+ * the same way — a failed fetch used to arrive as `entries: []`, indistinguishable from
+ * "dod has no dashboards", which cleared the user's selection. See `DodApp.refresh`.
+ */
+export interface StateResult extends ApiState {
+  ok: boolean;
+}

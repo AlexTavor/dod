@@ -15,14 +15,17 @@ describe('DodApi.state', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/state');
   });
 
-  it('returns empty lists when the request throws', async () => {
+  // The two cases below produce the same lists and must stay tellable apart by `ok`: that
+  // difference is the whole reason the flag exists (a dropped poll must not look like a board
+  // dod actually reported as empty).
+  it('reports ok:false with empty lists when the request throws', async () => {
     const api = new DodApi('tok', vi.fn().mockRejectedValue(new Error('down')) as unknown as FetchLike);
-    expect(await api.state()).toEqual({ entries: [], discovered: [] });
+    expect(await api.state()).toEqual({ ok: false, entries: [], discovered: [] });
   });
 
-  it('fills missing keys with empty lists', async () => {
+  it('reports ok:true, filling missing keys with empty lists', async () => {
     const api = new DodApi('tok', vi.fn().mockResolvedValue(jsonResponse({})) as unknown as FetchLike);
-    expect(await api.state()).toEqual({ entries: [], discovered: [] });
+    expect(await api.state()).toEqual({ ok: true, entries: [], discovered: [] });
   });
 });
 

@@ -21,6 +21,13 @@ export class DodApp extends LitElement {
 
   @state() private entries: State[] = [];
   @state() private selected: string | null = null;
+  /**
+   * The last State seen for `selected`, so a poll that briefly omits it does not blank a
+   * working pane. dashkit polls /api/render on its own, so the dashboard is still live while
+   * the row is missing — dropping to the empty prompt would tear that mount down for nothing.
+   * Held only while `selected` is set; `select()` and a real disappearance both clear it.
+   */
+  private lastSel: State | null = null;
   /** id → the action verb in flight, so a clicked button reacts at once (before the POST returns). */
   @state() private pending = new Map<string, string>();
 
@@ -48,10 +55,26 @@ export class DodApp extends LitElement {
     if (this.timer) clearTimeout(this.timer);
   }
 
+  /** Change the selection, re-seeding the remembered state from the board as it stands now. */
+  private select(id: string | null): void {
+    this.selected = id;
+    this.lastSel = id ? (this.entries.find((e) => e.id === id) ?? null) : null;
+  }
+
   async refresh(): Promise<void> {
-    const { entries } = await this.api.state();
-    this.entries = entries.filter((e) => e.state !== 'archived');
-    if (this.selected && !this.entries.some((e) => e.id === this.selected)) this.selected = null;
+    const res = await this.api.state();
+    if (!res.ok) return; // a dropped poll is not news: keep the board, and the selection with it
+    this.entries = res.entries.filter((e) => e.state !== 'archived');
+    const found = this.entries.find((e) => e.id === this.selected) ?? null;
+    if (found) {
+      this.lastSel = found;
+    } else if (this.selected && this.entries.length > 0) {
+      // Only a NON-EMPTY board is evidence the entry is really gone (archived, forgotten).
+      // An empty one means dod has no snapshot to give yet — it restarted and its first
+      // sampler tick has not run — and clearing the selection there stranded the pane on
+      // "Select a project on the left" until the user clicked again, long after it returned.
+      this.select(null);
+    }
   }
 
   private async act(verb: string, id: string): Promise<void> {
@@ -91,7 +114,7 @@ export class DodApp extends LitElement {
 
   render(): TemplateResult {
     const live = this.entries.filter(isLive).length;
-    const sel = this.entries.find((e) => e.id === this.selected) ?? null;
+    const sel = this.entries.find((e) => e.id === this.selected) ?? this.lastSel;
     return html`
       <header>
         <b>dod</b><span class="tagline">project control</span>
@@ -102,9 +125,7 @@ export class DodApp extends LitElement {
         .entries=${this.entries}
         .selected=${this.selected}
         .pending=${this.pending}
-        @select=${(ev: CustomEvent<string>) => {
-          this.selected = ev.detail;
-        }}
+        @select=${(ev: CustomEvent<string>) => this.select(ev.detail)}
         @action=${(ev: CustomEvent<{ verb: string; id: string }>) => void this.act(ev.detail.verb, ev.detail.id)}
         @reorder=${(ev: CustomEvent<{ from: string; to: string }>) => void this.doReorder(ev.detail.from, ev.detail.to)}
       ></dod-list>
