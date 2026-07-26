@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -22,11 +24,24 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def atomic_write(path: Path, text: str) -> None:
-    """Write via a temp file + os.replace so a reader never sees a half-written file."""
+    """Write via a per-writer temp file + os.replace, so a reader never sees a half-written
+    file AND two concurrent writers cannot destroy each other's temp.
+
+    The temp name carries pid+thread id. A fixed ``<name>.tmp`` made this atomic only for a
+    single writer: dod writes ``ports.json`` from the sampler thread *and* from every
+    ThreadingHTTPServer handler thread (``registry.load`` → ``PortAllocator.allocate``), so
+    two writers shared one temp path — the first ``os.replace`` consumed it and the second
+    raised ``FileNotFoundError``. ``registry.load`` caught that as "provider failed", which
+    dropped every dashboard that provider owns out of ``/api/state`` for a tick.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)     # never leave a partial temp behind
+        raise
 
 
 def write_json(path: Path, obj: Any) -> None:

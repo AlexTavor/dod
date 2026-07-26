@@ -71,6 +71,39 @@ describe('dod-detail', () => {
     el.remove();
   });
 
+  it('remounts against the new render url when the selected entry changes', async () => {
+    const stop = vi.fn();
+    const mountSpec = vi.fn().mockReturnValue({ stop });
+    const el = await makeDetail(
+      { id: 'a', status: 'live', state: 'ready', render: 'spec' },
+      mountSpec as unknown as DodDetail['mountSpec'],
+    );
+    el.entry = { id: 'b', status: 'live', state: 'ready', render: 'spec' };
+    await el.updateComplete;
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(mountSpec).toHaveBeenCalledTimes(2);
+    expect((mountSpec.mock.calls[1]?.[0] as { renderUrl: string }).renderUrl).toContain('id=b');
+    el.remove();
+  });
+
+  it('does not tear a working dashboard down over a liveness detail', async () => {
+    // The remount key used to carry e.state, so any change the sampler reported — including
+    // the unhealthy flicker this branch removes — unmounted dashkit and re-fetched the spec
+    // from scratch, blanking the pane. The host element did not move, so neither should the
+    // mount.
+    const stop = vi.fn();
+    const mountSpec = vi.fn().mockReturnValue({ stop });
+    const el = await makeDetail(
+      { id: 'a', status: 'live', state: 'ready', render: 'spec' },
+      mountSpec as unknown as DodDetail['mountSpec'],
+    );
+    el.entry = { id: 'a', status: 'live', state: 'running', render: 'spec', log_tail: 'newer' };
+    await el.updateComplete;
+    expect(stop).not.toHaveBeenCalled();
+    expect(mountSpec).toHaveBeenCalledTimes(1);
+    el.remove();
+  });
+
   it('a head/pane action button emits action', async () => {
     const el = await makeDetail({ id: 'a', status: 'stopped', state: 'stopped', cmd: ['x'] });
     const onAction = vi.fn();

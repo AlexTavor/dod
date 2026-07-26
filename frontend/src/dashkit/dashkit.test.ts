@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { Spec } from '../types';
-import { refreshDelay, renderSpec } from './index';
+import { mount, refreshDelay, renderSpec } from './index';
 
 describe('renderSpec', () => {
   it('renders a title plus section and stat atoms into the element', () => {
@@ -68,6 +68,58 @@ describe('renderSpec', () => {
     renderSpec({ panels: [{ type: 'stat', label: 'b', value: 2 }] }, el);
     expect(el.querySelector('.dk-stat')).toBe(first);
     expect(el.querySelector('.dk-l')?.textContent).toContain('b');
+  });
+
+  // Panel ids are only unique WITHIN a spec, and producers reuse them across specs by design
+  // (every PDD plan dashboard emits its graph as id "plan"). The namespace is what stops one
+  // project's spec from inheriting another's DOM when both render into the same element.
+  it('keeps two sources apart when they reuse the same panel id', () => {
+    const el = document.createElement('div');
+    renderSpec({ panels: [{ type: 'stat', id: 'plan', label: 'A', value: 1 }] }, el, undefined, 'a');
+    const first = el.querySelector('.dk-stat');
+    renderSpec({ panels: [{ type: 'stat', id: 'plan', label: 'B', value: 2 }] }, el, undefined, 'b');
+    expect(el.querySelector('.dk-stat')).not.toBe(first); // fresh DOM: no state carried across
+    expect(el.textContent).toContain('B');
+  });
+
+  it('still reuses a keyed panel’s DOM within one source (no-op safety)', () => {
+    const el = document.createElement('div');
+    renderSpec({ panels: [{ type: 'stat', id: 'plan', label: 'x', value: 1 }] }, el, undefined, 'a');
+    const first = el.querySelector('.dk-stat');
+    renderSpec({ panels: [{ type: 'stat', id: 'plan', label: 'x', value: 2 }] }, el, undefined, 'a');
+    expect(el.querySelector('.dk-stat')).toBe(first); // same source → updated in place
+  });
+});
+
+describe('mount', () => {
+  /** A fetch that never settles: the window where a mount has started but has no spec yet. */
+  const pendingFetch = (): void => {
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>(() => {})));
+  };
+
+  it('clears the host before its first render, so the previous dashboard cannot linger', () => {
+    const el = document.createElement('div');
+    renderSpec({ panels: [{ type: 'stat', label: 'project-a-only', value: 1 }] }, el, undefined, 'a');
+    expect(el.textContent).toContain('project-a-only');
+
+    pendingFetch();
+    const h = mount({ renderUrl: '/api/render?id=b', mount: el });
+    // Project B's first poll is still in flight — A must already be gone, not left standing
+    // under B's header until (or unless) that poll ever resolves.
+    expect(el.textContent).not.toContain('project-a-only');
+    h.stop();
+    vi.unstubAllGlobals();
+  });
+
+  it('clears the host on stop, so a stopped mount leaves nothing behind', () => {
+    const el = document.createElement('div');
+    pendingFetch();
+    const h = mount({ renderUrl: '/api/render?id=a', mount: el });
+    renderSpec({ panels: [{ type: 'stat', label: 'still-here', value: 1 }] }, el, undefined, '/api/render?id=a');
+    expect(el.textContent).toContain('still-here');
+    h.stop();
+    expect(el.textContent).not.toContain('still-here');
+    vi.unstubAllGlobals();
   });
 });
 

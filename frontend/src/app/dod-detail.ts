@@ -58,28 +58,32 @@ export class DodDetail extends LitElement {
 
   // Lit's diffing keeps the #dkhost element across re-renders, so the mounted dashkit content
   // does not flicker. We only (re)mount when the rendered target actually changes.
+  //
+  // The host we just rendered IS the condition — asking the DOM cannot disagree with `body()`,
+  // whereas re-deriving the condition here could, and did: this tested `isLive && render ===
+  // 'spec'`, while `body()` also routes starting/crashed/unhealthy entries elsewhere. The key
+  // is deliberately free of `e.state` too, so a state change that leaves the host in place no
+  // longer tears down a working dashboard and re-fetches it from scratch.
   protected updated(): void {
+    const host = this.querySelector<HTMLElement>('#dkhost');
     const e = this.entry;
-    const key = e ? `${e.id}:${e.state ?? ''}:${e.render ?? ''}` : null;
+    const key = host && e ? `${e.id}:${e.render ?? ''}` : null;
     if (key === this.framed) return;
     this.framed = key;
     this.stopMount();
-    if (e && isLive(e) && e.render === 'spec') {
-      const host = this.querySelector<HTMLElement>('#dkhost');
-      if (host) {
-        this.handle = this.mountSpec({
-          renderUrl: `/api/render?id=${encodeURIComponent(e.id)}`,
-          mount: host,
-          onAction: (action, payload) =>
-            this.dispatchEvent(
-              new CustomEvent('spec-action', {
-                detail: { id: e.id, action, payload },
-                bubbles: true,
-                composed: true,
-              }),
-            ),
-        });
-      }
+    if (host && e) {
+      this.handle = this.mountSpec({
+        renderUrl: `/api/render?id=${encodeURIComponent(e.id)}`,
+        mount: host,
+        onAction: (action, payload) =>
+          this.dispatchEvent(
+            new CustomEvent('spec-action', {
+              detail: { id: e.id, action, payload },
+              bubbles: true,
+              composed: true,
+            }),
+          ),
+      });
     }
   }
 

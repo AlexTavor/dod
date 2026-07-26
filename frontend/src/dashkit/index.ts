@@ -1,4 +1,4 @@
-import { html, render } from 'lit';
+import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { ActionHandler, Panel, Spec } from '../types';
@@ -11,13 +11,26 @@ export const version = '1';
  * A stable identity for one panel across renders. A producer-supplied `id` wins; otherwise
  * the position is the identity, which matches the old unkeyed behaviour for that panel.
  * The two are namespaced apart so an id of "3" can never collide with index 3.
+ *
+ * `ns` scopes the whole key to one source. Panel ids are only unique *within* a spec, and
+ * producers reuse them across specs by design — every PDD plan dashboard emits its graph as
+ * `id: "plan"`. Two specs rendered into one element would therefore match `id:plan` to
+ * `id:plan` and hand one project's `dk-dag` (with its hover, selection and open inspector)
+ * straight to another project's graph.
  */
-const panelKey = (p: Panel, i: number): string =>
-  typeof (p as { id?: unknown }).id === 'string' ? `id:${(p as { id: string }).id}` : `ix:${i}`;
+/** Separator for a namespaced key. Written as an escape on purpose: a literal NUL byte in
+ *  source is invisible to a reader and trivially lost by an editor. */
+const KEY_SEP = '\u0000';
+
+const panelKey = (ns: string, p: Panel, i: number): string =>
+  typeof (p as { id?: unknown }).id === 'string'
+    ? `${ns}${KEY_SEP}id:${(p as { id: string }).id}`
+    : `${ns}${KEY_SEP}ix:${i}`;
 
 /**
  * Render a spec into an element. Synchronous and idempotent (safe to call every poll).
  * `onAction` routes interact-down button clicks; omit it for a read-only render.
+ * `ns` identifies the spec's source (`mount` passes its renderUrl); see `panelKey`.
  *
  * Panels are keyed. Unkeyed, Lit reuses DOM by position, so inserting or removing a panel
  * above a stateful atom hands that atom's DOM to a different panel: a half-filled `dk-form`
@@ -25,7 +38,7 @@ const panelKey = (p: Panel, i: number): string =>
  * its scroll position. The daemon re-renders every few seconds, so this fires on any spec
  * whose panel list changes shape while someone is typing.
  */
-export function renderSpec(spec: Spec, el: HTMLElement, onAction?: ActionHandler): void {
+export function renderSpec(spec: Spec, el: HTMLElement, onAction?: ActionHandler, ns = ''): void {
   injectCSS();
   el.classList.add('dk-root');
   const panels = spec.panels ?? [];
@@ -33,7 +46,7 @@ export function renderSpec(spec: Spec, el: HTMLElement, onAction?: ActionHandler
     html`
       ${spec.title ? html`<div class="dk-title">${spec.title}</div>` : ''}
       <div class="dk-panels">
-        ${repeat(panels, panelKey, (p) => panel(p, onAction))}
+        ${repeat(panels, (p, i) => panelKey(ns, p, i), (p) => panel(p, onAction))}
       </div>
     `,
     el,
@@ -92,13 +105,20 @@ export function mount(opts: MountOpts): { stop: () => void } {
   // asked for rather than snapping back to the default.
   let last: Spec | null = null;
 
+  // A host element outlives the mount inside it: dod's detail pane keeps one #dkhost and
+  // re-mounts it whenever you switch dashboards. Clearing it here is what makes a mount own
+  // its own subtree. Without it the previous dashboard stayed on screen for the whole first
+  // fetch — and if that fetch failed, the `catch` below "kept the last good render up",
+  // which was the OTHER project's dashboard, under this project's header, indefinitely.
+  render(nothing, el);
+
   const tick = async (): Promise<void> => {
     if (stopped) return;
     try {
       const spec = (await (await fetch(opts.renderUrl, { cache: 'no-store' })).json()) as Spec;
       if (stopped) return;
       last = spec;
-      renderSpec(spec, el, onAction);
+      renderSpec(spec, el, onAction, opts.renderUrl);
     } catch {
       /* keep the last good render up; the next tick retries */
     }
@@ -110,6 +130,7 @@ export function mount(opts: MountOpts): { stop: () => void } {
     stop: () => {
       stopped = true;
       if (timer) clearTimeout(timer);
+      render(nothing, el); // this mount's DOM goes with it; nothing stale is left standing
     },
   };
 }

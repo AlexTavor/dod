@@ -125,3 +125,53 @@ describe('dod-app', () => {
     app.remove();
   });
 });
+
+// A dropped poll, a board dod has not populated yet, and an entry that is genuinely gone all
+// used to arrive as "the selected id is not in the list" and clear the selection — leaving the
+// pane on "Select a project on the left" long after the dashboard came back. Only the last of
+// the three is real news.
+describe('dod-app selection survives a bad poll', () => {
+  const LIVE = { id: 'a', name: 'Aa', status: 'live', state: 'ready' };
+
+  /** An app with 'a' loaded and selected, and its fetch mock, ready for a second poll. */
+  async function selected(second: unknown): Promise<[DodApp, ReturnType<typeof vi.fn>]> {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ entries: [LIVE], discovered: [] }))
+      .mockImplementationOnce(() => (second instanceof Error ? Promise.reject(second) : Promise.resolve(second)));
+    const app = makeApp(new DodApi('t', fetchMock as unknown as FetchLike));
+    await app.refresh();
+    await app.updateComplete;
+    app.querySelector('dod-list')?.dispatchEvent(new CustomEvent('select', { detail: 'a', bubbles: true }));
+    await app.updateComplete;
+    expect(app.querySelector('dod-detail')?.textContent).toContain('Aa');
+    return [app, fetchMock];
+  }
+
+  it('keeps the board and the selection when the poll fails outright', async () => {
+    const [app] = await selected(new Error('daemon restarting'));
+    await app.refresh();
+    await app.updateComplete;
+    expect(app.querySelectorAll('dod-list .item').length).toBe(1);
+    expect(app.querySelector('dod-detail')?.textContent).toContain('Aa');
+    app.remove();
+  });
+
+  it('keeps the selection when dod answers with an empty board', async () => {
+    // dod restarted: it is serving, but its first sampler tick has not produced a snapshot.
+    const [app] = await selected(jsonResponse({ entries: [], discovered: [] }));
+    await app.refresh();
+    await app.updateComplete;
+    expect(app.querySelector('dod-detail')?.textContent).toContain('Aa');
+    app.remove();
+  });
+
+  it('still clears the selection when a populated board no longer lists it', async () => {
+    // The case that must keep working: the entry really is gone (archived, forgotten).
+    const [app] = await selected(jsonResponse({ entries: [{ id: 'other', status: 'live', state: 'ready' }], discovered: [] }));
+    await app.refresh();
+    await app.updateComplete;
+    expect(app.querySelector('dod-detail')?.textContent).toContain('Select a project');
+    app.remove();
+  });
+});

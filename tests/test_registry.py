@@ -51,6 +51,52 @@ def test_broken_provider_does_not_sink_registry(paths):
     write_registry(paths, [entry("a")])
     loaded = Registry(paths, providers=[Boom()]).load()
     assert "a" in loaded                             # registry still loads
+    assert "boom" not in loaded                      # nothing memorised yet → nothing to serve
+
+
+def test_transient_provider_fault_serves_the_last_good_entries(paths):
+    """A provider that raises must not blank the dashboards it owns.
+
+    They used to vanish from /api/state for that tick, and the UI — seeing the selected id
+    gone — cleared the selection and stranded the pane on "Select a project on the left".
+    """
+    class Flaky:
+        name = "flaky"
+        calls = 0
+
+        def discover(self, _paths, _reserved=frozenset()):
+            type(self).calls += 1
+            if type(self).calls == 2:                # the ports.json write race, once
+                raise FileNotFoundError("ports.json.tmp -> ports.json")
+            return [entry("prov-a"), entry("prov-b")]
+
+    reg = Registry(paths, providers=[Flaky()])
+    assert sorted(reg.load()) == ["prov-a", "prov-b"]
+    assert sorted(reg.load()) == ["prov-a", "prov-b"]   # the raising tick, served from memory
+    assert sorted(reg.load()) == ["prov-a", "prov-b"]   # and recovered on its own
+
+
+def test_last_good_is_replaced_by_every_healthy_scan(paths):
+    """Only a RAISING scan reuses memory, and it reuses the most recent good one.
+
+    Without this, the fallback would resurrect entries a healthy scan deliberately dropped —
+    a repo you deleted would keep reappearing forever.
+    """
+    class Shrinking:
+        name = "shrink"
+
+        def __init__(self):
+            self.results = [[entry("a"), entry("b")], [entry("a")]]
+
+        def discover(self, _paths, _reserved=frozenset()):
+            if self.results:
+                return self.results.pop(0)
+            raise RuntimeError("down")
+
+    reg = Registry(paths, providers=[Shrinking()])
+    assert sorted(reg.load()) == ["a", "b"]
+    assert sorted(reg.load()) == ["a"]               # healthy scan dropped b → b stays gone
+    assert sorted(reg.load()) == ["a"]               # raising now: serves the LATEST good scan
 
 
 def test_archive_overlay_sets_state_override(paths, registry):
