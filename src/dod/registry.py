@@ -67,6 +67,8 @@ class Registry:
         self.providers = list(providers or [])
         # relative cwds resolve against this base; entries should normally be absolute.
         self.project_base = project_base or Path.home()
+        # provider name → its last successful discover() result; see _provider_entries.
+        self._last_good: dict[str, list[dict[str, Any]]] = {}
 
     def load(self) -> dict[str, Entry]:
         """Merged, validated entries with the archive overlay applied + duplicate-port lint."""
@@ -78,17 +80,14 @@ class Registry:
         # afterwards because a provider bakes its port into the argv it emits.
         reserved = set(claimed_ports(self.paths))
         for prov in self.providers:
-            try:
-                for raw in prov.discover(self.paths, frozenset(reserved)):
-                    v = validate(dict(raw), f"provider:{prov.name}")
-                    if v:
-                        v["provider"] = prov.name
-                        entries[v["id"]] = v
-                        port = v.get("port")
-                        if v["type"] != "terminal" and port:
-                            reserved.add(port)
-            except Exception:  # a broken provider must not sink the registry (logged, not swallowed)
-                logger.exception("provider %s failed", getattr(prov, "name", "?"))
+            for raw in self._provider_entries(prov, frozenset(reserved)):
+                v = validate(dict(raw), f"provider:{prov.name}")
+                if v:
+                    v["provider"] = prov.name
+                    entries[v["id"]] = v
+                    port = v.get("port")
+                    if v["type"] != "terminal" and port:
+                        reserved.add(port)
         for path, src in ((self.paths.registry, "registry"), (self.paths.local, "local")):
             for raw in load_json(path).get("entries", []):
                 v = validate(dict(raw), src)
@@ -100,6 +99,29 @@ class Registry:
                 entries[eid]["state_override"] = st.get("state")
         self._lint_ports(entries)
         return entries
+
+    def _provider_entries(self, prov: Provider,
+                          reserved: frozenset[int]) -> list[dict[str, Any]]:
+        """One provider's raw entries, falling back to its last successful result.
+
+        A provider that raises used to contribute NOTHING to this load, so a single transient
+        fault dropped every dashboard it owns out of ``/api/state`` for that tick — and the UI,
+        seeing the selected id gone, cleared the user's selection and showed an empty pane.
+        Serving the previous scan keeps the board whole; the next good scan corrects it.
+
+        The reused entries were discovered under an older ``reserved`` set, so their ports can
+        be momentarily stale. Stale-but-present beats absent: a wrong port shows as one
+        unhealthy tile, a missing entry silently unselects the dashboard you were reading.
+        """
+        try:
+            raws = [dict(raw) for raw in prov.discover(self.paths, reserved)]
+        except Exception:  # a broken provider must not sink the registry (logged, not swallowed)
+            stale = self._last_good.get(prov.name, [])
+            logger.exception("provider %s failed; serving its last %d entries",
+                             getattr(prov, "name", "?"), len(stale))
+            return stale
+        self._last_good[prov.name] = raws
+        return raws
 
     @staticmethod
     def _lint_ports(entries: dict[str, Entry]) -> None:

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 import sys
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -89,6 +90,11 @@ class PddProvider:
         self._cache: list[Entry] | None = None
         self._cache_at = 0.0
         self._cache_reserved: frozenset[int] = frozenset()
+        # discover() is called from the sampler thread AND from every HTTP handler thread
+        # (registry.get on /api/render, /api/action). Unlocked, they all saw the same expired
+        # TTL and stampeded _scan together — N concurrent fs walks and N racing ports.json
+        # writes for one cache miss. One scans, the rest wait for its result.
+        self._lock = threading.Lock()
 
     @classmethod
     def from_paths(cls, paths: Paths) -> PddProvider:
@@ -97,16 +103,17 @@ class PddProvider:
 
     def discover(self, paths: Paths, reserved: frozenset[int] = frozenset()) -> list[Entry]:
         now = time.monotonic()
-        # The cache keys on `reserved` too: a newly-claimed port must re-scan rather than
-        # serve an assignment made when that port still looked free.
-        cached = self._cache
-        if (cached is not None and (now - self._cache_at) < self.ttl
-                and self._cache_reserved == reserved):
-            return cached
-        self._cache = self._scan(paths, reserved)
-        self._cache_at = now
-        self._cache_reserved = reserved
-        return self._cache
+        with self._lock:
+            # The cache keys on `reserved` too: a newly-claimed port must re-scan rather than
+            # serve an assignment made when that port still looked free.
+            cached = self._cache
+            if (cached is not None and (now - self._cache_at) < self.ttl
+                    and self._cache_reserved == reserved):
+                return cached
+            self._cache = self._scan(paths, reserved)
+            self._cache_at = now
+            self._cache_reserved = reserved
+            return self._cache
 
     def _dag_entry(self, slug: str, repo: Path, port: int) -> Entry:
         """The plan as a native dag spec, served by our own stdlib kit. No node, no PDD CLI."""
