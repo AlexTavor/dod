@@ -2,6 +2,7 @@ import os
 import threading
 
 import dod.probe as probe
+from dod.supervisor import PROBE_MISSES
 from tests.conftest import FakeProc, entry, my_lockfile
 
 
@@ -148,6 +149,110 @@ def test_state_starting_then_unhealthy_at_timeout_boundary(sup, monkeypatch):
     assert sup.state(e)["state"] == "starting"
     sup.clock.t = 1020.0                   # boundary: elapsed == timeout → unhealthy
     assert sup.state(e)["state"] == "unhealthy"
+
+
+# ── probe miss budget: one bad sample must not rewrite the board ────────
+class Child:
+    """A child whose probe and /api/meta answers can be flipped mid-test."""
+
+    def __init__(self, sup, monkeypatch, up=True, meta=None):
+        self.up, self.meta = up, meta
+        monkeypatch.setattr(probe, "port_open", lambda p: True)
+        monkeypatch.setattr(probe, "probe", lambda p, r: (self.up, True, 200 if self.up else None))
+        monkeypatch.setattr(probe, "fetch_meta", lambda p: self.meta)
+
+
+def _live_spec_child(sup, monkeypatch, **kw):
+    """A dod-owned entry that has answered once, with its ready window already closed —
+    the state from which a miss is a hiccup rather than a slow start."""
+    child = Child(sup, monkeypatch, **kw)
+    my_lockfile(sup, "d1", port=8077)
+    e = entry("d1", port=8077, ready_timeout_s=20)
+    assert sup.state(e)["state"] == "ready"       # serves once: this is what earns the budget
+    sup.clock.t += 100                            # past ready_timeout: no longer "starting"
+    child.up = False
+    return child, e
+
+
+def test_misses_below_the_budget_keep_it_ready(sup, monkeypatch):
+    """PROBE_MISSES - 1 consecutive misses: still ready.
+
+    Pairs with the boundary test below to pin `<` rather than `<=`; a `<=` would hold the
+    dashboard ready for one miss longer than the budget allows.
+    """
+    _, e = _live_spec_child(sup, monkeypatch)
+    for _ in range(PROBE_MISSES - 1):
+        assert sup.state(e)["state"] == "ready"
+
+
+def test_the_budget_th_miss_is_unhealthy(sup, monkeypatch):
+    """Exactly PROBE_MISSES consecutive misses → unhealthy. The boundary case."""
+    _, e = _live_spec_child(sup, monkeypatch)
+    for _ in range(PROBE_MISSES - 1):
+        sup.state(e)
+    assert sup.state(e)["state"] == "unhealthy"
+
+
+def test_the_budget_counts_only_consecutive_misses(sup, monkeypatch):
+    """One good probe resets it: misses either side of a success never add up to a verdict."""
+    child, e = _live_spec_child(sup, monkeypatch)
+    for _ in range(PROBE_MISSES - 1):
+        sup.state(e)
+    child.up = True
+    assert sup.state(e)["state"] == "ready"
+    child.up = False
+    for _ in range(PROBE_MISSES - 1):             # a full budget short of a verdict again
+        assert sup.state(e)["state"] == "ready"
+
+
+def test_a_child_that_never_served_is_unhealthy_on_the_first_miss(sup, monkeypatch):
+    """The budget is only for a child that HAS answered. One that never came up inside its
+    ready window must not be granted PROBE_MISSES ticks of borrowed health."""
+    Child(sup, monkeypatch, up=False)
+    my_lockfile(sup, "d1", port=8077)
+    e = entry("d1", port=8077, ready_timeout_s=20)
+    sup.clock.t += 100                            # ready window closed, never answered
+    assert sup.state(e)["state"] == "unhealthy"
+
+
+def test_restarting_forgets_the_previous_process_budget(sup, monkeypatch, fake_spawn):
+    """A restarted child re-earns its budget instead of inheriting the last process's."""
+    _, e = _live_spec_child(sup, monkeypatch)
+    sup.state(e)                                  # one miss banked against the old process
+    sup.start(e)
+    sup.clock.t += 100
+    assert sup.state(e)["state"] == "unhealthy"   # never served since start → no budget
+
+
+# ── contract memory: a missed sniff must not swap the pane ──────────────
+SPEC_META = {"contract": "dod-kit/1", "render": "spec", "name": "plan"}
+
+
+def test_missed_meta_sniff_keeps_the_spec_render(sup, monkeypatch):
+    """/api/meta is a SECOND request after the probe, so it can miss on its own. That used
+    to leave render at its "iframe" default, swapping a native dashboard for an iframe of
+    the child's standalone shim for one tick."""
+    child = Child(sup, monkeypatch, meta=SPEC_META)
+    my_lockfile(sup, "d1", port=8077)
+    e = entry("d1", port=8077)
+    assert sup.state(e)["render"] == "spec"
+    child.meta = None                             # the sniff misses; the probe still answers
+    assert sup.state(e)["render"] == "spec"
+
+
+def test_missed_probe_within_budget_keeps_the_spec_render(sup, monkeypatch):
+    """A tick inside the miss budget reports the pane it had, not a bare default."""
+    _, e = _live_spec_child(sup, monkeypatch, meta=SPEC_META)
+    st = sup.state(e)
+    assert (st["state"], st["render"]) == ("ready", "spec")
+
+
+def test_a_child_that_never_announced_a_contract_stays_an_iframe(sup, monkeypatch):
+    """No-op path: no meta was ever seen, so there is nothing to remember and the default
+    stands. The memory must not invent a spec dashboard out of a silent child."""
+    Child(sup, monkeypatch, meta=None)
+    my_lockfile(sup, "d1", port=8077)
+    assert sup.state(entry("d1", port=8077))["render"] == "iframe"
 
 
 def test_state_crashed_survives_restart(sup, monkeypatch):

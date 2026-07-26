@@ -32,7 +32,7 @@ from typing import Protocol, cast
 
 from . import probe as net
 from .config import LOG_CAP, Paths
-from .models import ActionResult, CrashMark, Entry, Lockfile, State, StopReason
+from .models import ActionResult, CrashMark, Entry, Lockfile, Meta, State, StopReason
 from .registry import Registry
 from .util import load_json, write_json
 
@@ -69,6 +69,14 @@ def _default_spawn(cmd: list[str], cwd: str | None, env: dict[str, str] | None,
 # Detailed states that mean "something is running" — projected to status="live".
 LIVE_STATES = frozenset({"ready", "external", "starting", "unhealthy", "launched", "running"})
 
+# How many CONSECUTIVE probe misses make a running child "unhealthy". One miss is a hiccup,
+# not a death: the probe is a 0.4s HTTP GET fired at every entry every 2s, so a load spike or
+# a sleep/wake can drop one. Calling that unhealthy was instantly visible, because the UI
+# replaces the whole dashboard pane with an error the moment it sees the word — the dashboard
+# flickered out and back for a fault that never touched the child. An owned child that
+# actually *exits* is still caught on the tick it dies, by poll(), before any probe runs.
+PROBE_MISSES = 3
+
 
 def _is_marker(name: str) -> bool:
     """A run-dir file that is NOT a child lockfile (crash/clean-stop reason markers)."""
@@ -96,6 +104,11 @@ class Supervisor:
         self.lock = threading.Lock()
         self.procs: dict[str, ProcHandle] = {}    # children THIS dod launched this session
         self.started_at: dict[str, float] = {}
+        # Per-entry probe memory, so one bad sample cannot rewrite the board. The sampler
+        # gives each entry to exactly one thread per tick, so these need no lock of their own.
+        self._misses: dict[str, int] = {}         # consecutive failed probes
+        self._served: set[str] = set()            # has answered its probe at least once
+        self._meta: dict[str, Meta] = {}          # last good /api/meta (see _apply_meta)
 
     # ── lockfiles + crash markers ───────────────────────────────────────
     def _read_lock(self, eid: str) -> Lockfile | None:
@@ -147,6 +160,7 @@ class Supervisor:
         eid = e["id"]
         cwd = self.registry.resolve_cwd(e)
         self._clear_marks(eid)                 # a fresh start clears any prior crash/stop reason
+        self._forget_probe(eid)                # …and any probe memory of the previous process
         if e["type"] == "terminal":
             try:
                 self._spawn(e["cmd"], cwd, None, None)
@@ -214,6 +228,7 @@ class Supervisor:
             with self.lock:
                 self.procs.pop(eid, None)
             self._clear_marks(eid)
+            self._forget_probe(eid)
             self._write_stop(eid)               # intentional stop → reason is clean
             self.paths.lock(eid).unlink(missing_ok=True)
             return {"ok": True}
@@ -242,6 +257,7 @@ class Supervisor:
         with self.lock:
             self.procs.pop(eid, None)
         self._clear_marks(eid)
+        self._forget_probe(eid)
         self._write_stop(eid)                   # clean stop → durable reason
         self.paths.lock(eid).unlink(missing_ok=True)
         return {"ok": True}
@@ -326,6 +342,37 @@ class Supervisor:
         # surviving stop marker means a deliberate stop; otherwise it never ran.
         return StopReason(kind="clean") if self.paths.stopmark(eid).exists() else None
 
+    def _apply_meta(self, eid: str, base: dict[str, object], port: int | None,
+                    sniff: bool) -> None:
+        """Fold the child's ``/api/meta`` into the row, remembering the last good answer.
+
+        ``/api/meta`` is a SECOND 0.4s request after the liveness probe, so it can miss on its
+        own while ``/`` answered fine. Without the memory, that miss left ``render`` at its
+        "iframe" default and a native spec dashboard swapped to an iframe of the child's
+        standalone shim for one tick, then swapped back. ``sniff=False`` reuses the remembered
+        meta without a request at all, which is what the miss-budget path wants.
+        """
+        fresh = net.fetch_meta(int(port)) if sniff and port else None
+        if fresh:
+            self._meta[eid] = fresh
+        meta = fresh or self._meta.get(eid)
+        if not meta:
+            return
+        base["render"] = "spec" if meta.get("render") == "spec" else "iframe"
+        if meta.get("name"):
+            base["name"] = meta["name"]
+        if meta.get("blurb"):
+            base["blurb"] = meta["blurb"]
+        if meta.get("why"):
+            base["why"] = meta["why"]
+
+    def _forget_probe(self, eid: str) -> None:
+        """Drop a child's probe memory, so a restarted child re-earns its miss budget and
+        re-sniffs its contract rather than inheriting the previous process's answers."""
+        self._misses.pop(eid, None)
+        self._served.discard(eid)
+        self._meta.pop(eid, None)
+
     def _state_raw(self, e: Entry) -> State:
         eid = e["id"]
         base: dict[str, object] = {"id": eid, "name": e.get("name", eid), "blurb": e.get("blurb", ""),
@@ -365,15 +412,9 @@ class Supervisor:
             return done(state="crashed", exit=rc)
 
         if ok:
-            meta = net.fetch_meta(int(port)) if port else None
-            if meta:
-                base["render"] = "spec" if meta.get("render") == "spec" else "iframe"
-                if meta.get("name"):
-                    base["name"] = meta["name"]
-                if meta.get("blurb"):
-                    base["blurb"] = meta["blurb"]
-                if meta.get("why"):
-                    base["why"] = meta["why"]
+            self._misses.pop(eid, None)
+            self._served.add(eid)
+            self._apply_meta(eid, base, port, sniff=True)
             if mine:
                 self._clear_crash(eid)                     # healthy again — drop any stale crash
                 return done(state="ready")
@@ -388,7 +429,15 @@ class Supervisor:
             started = self.started_at.get(eid) or (lf or {}).get("started_at") or 0
             within = (self.clock() - started) < e.get("ready_timeout_s", 20)
             base["log_tail"] = net.log_tail(self.paths.log(eid))
-            return done(state="starting" if within else "unhealthy")
+            if within:
+                return done(state="starting")
+            misses = self._misses[eid] = self._misses.get(eid, 0) + 1
+            # The miss budget is only for a child that HAS served: one that never answered
+            # inside its ready window is genuinely unhealthy and must not be masked by it.
+            if eid in self._served and misses < PROBE_MISSES:
+                self._apply_meta(eid, base, port, sniff=False)   # keep the pane it had
+                return done(state="ready")
+            return done(state="unhealthy")
         if port and net.port_open(int(port)):
             return done(state="port-busy-foreign", controllable=False)
         return done(state="stopped", log_tail=net.log_tail(self.paths.log(eid)))
