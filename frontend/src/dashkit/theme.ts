@@ -12,13 +12,19 @@ const CSS = `
    values are unchanged here; only the ramp and accent2 move. */
 .dk-root{--dk-bg:#16140f;--dk-panel:#1f1b15;--dk-fg:#ece6d8;--dk-muted:#9a9384;--dk-line:#352f25;--dk-edge:#776d5c;
   --dk-accent:#d98a4f;--dk-accent2:#e8a765;--dk-ok:#6fa8a0;--dk-warn:#cda94e;--dk-err:#d4707a;--dk-ready:#7f9bd1;--dk-crit:#e35d44;
+  /* a search-hit wash: a surface tint, never a status. It is the SECOND cue -- the non-hits
+     dimming is the loud one -- so it is pitched to separate from --dk-panel (1.57:1 dark,
+     1.54:1 light, measured) without swamping a graph where most units match, and to stay well
+     clear of the label (8.8:1 dark, 11.1:1 light) so a hit reads no worse than any other unit.
+     It carries the highlight alone only while hover has taken the dimming away. */
+  --dk-find:#4a3a23;
   --dk-c1:#8fbf7e;--dk-c2:#c495d8;--dk-c3:#d59bb4;--dk-c4:#6e8390;--dk-c5:#c9a97e;--dk-c6:#5fb9b2;
   color:var(--dk-fg);background:var(--dk-bg);font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;
   box-sizing:border-box;padding:18px 20px;display:block;min-height:100%}
 .dk-root *{box-sizing:border-box}
 html[data-theme=light] .dk-root,.dk-root[data-theme=light]{--dk-bg:#faf8f3;--dk-panel:#fff;--dk-fg:#1c1b19;
   --dk-muted:#7a756c;--dk-line:#e7e2d8;--dk-edge:#8b8478;--dk-accent:#b4541f;--dk-accent2:#c9762c;--dk-ok:#3f807a;
-  --dk-warn:#9a7a18;--dk-err:#b1414f;--dk-ready:#41639b;--dk-crit:#b83227;--dk-c1:#4a7a3a;--dk-c2:#7a5bb0;--dk-c3:#a0507e;
+  --dk-warn:#9a7a18;--dk-err:#b1414f;--dk-ready:#41639b;--dk-crit:#b83227;--dk-find:#f2ca8b;--dk-c1:#4a7a3a;--dk-c2:#7a5bb0;--dk-c3:#a0507e;
   --dk-c4:#4a6670;--dk-c5:#8a6134;--dk-c6:#2f7f88}
 .dk-title{font-size:16px;font-weight:600;letter-spacing:.02em;margin:0 0 12px}
 .dk-panels{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;align-items:start}
@@ -69,6 +75,14 @@ pre.dk-log{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius
 .dk-f textarea{min-height:84px;resize:vertical} .dk-fcheck{flex-direction:row;align-items:center;gap:7px}
 /* stateful atoms wrap a dk-full panel; display:contents promotes that panel to the grid item so it spans the row */
 dk-dag,dk-form,dk-wordcloud{display:contents}
+/* title on the left, search on the right; the search drops under the title when the panel is
+   too narrow to hold both. */
+.dk-dag-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px}
+.dk-dag-find{display:flex;align-items:center;gap:8px}
+.dk-dag-q{background:var(--dk-bg);border:1px solid var(--dk-line);border-radius:6px;color:var(--dk-fg);font:inherit;font-size:12px;padding:4px 9px;width:190px;max-width:42vw}
+.dk-dag-q:focus{outline:none;border-color:var(--dk-accent)}
+.dk-dag-tally{font-size:11px;color:var(--dk-muted);font-family:ui-monospace,monospace;min-width:52px}
+.dk-dag-tally.none{color:var(--dk-warn)}
 .dk-dag-legend{margin:6px 0 0}
 .dk-dag-elig-key{background:transparent!important;border:2px solid var(--dk-ready);border-radius:3px}
 .dk-dag-crit-key{background:var(--dk-crit)!important}
@@ -96,6 +110,9 @@ svg.dk-dag{display:block}
 .dk-dag-node.act{cursor:pointer}
 .dk-dag-node.dim{opacity:.3}
 .dk-dag-box{fill:var(--dk-panel);stroke:var(--dk-line);stroke-width:1}
+/* A search hit tints its fill, so it survives every stroke the node may also be carrying
+   (ready ring, critical outline, hover, selection) instead of competing with them. */
+.dk-dag-node.match .dk-dag-box{fill:var(--dk-find)}
 .dk-dag-box.elig{stroke:var(--dk-ready);stroke-width:2}
 .dk-dag-node:hover .dk-dag-box{stroke:var(--dk-accent)}
 /* Hover must not eat the ready ring. The plain hover rule above is (0,3,0) and outranked the
